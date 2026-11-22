@@ -181,9 +181,30 @@ spec = describe "bye" $ do
         writeIORef failing True
         E.try @E.AsyncException (sendData sCtx "abc") `shouldReturn` Left E.ThreadKilled
         writeIORef failing False
+        -- An asynchronous exception is not thrown again.
+        E.try @TLSException (sendData sCtx "abc") `shouldReturn` Left (PostHandshake (Error_Misc "a previous send failed"))
         n <- readIORef sent
         timeout 5000000 (bye sCtx) `shouldReturn` Just ()
         readIORef sent `shouldReturn` n
+
+    it "throws the exception of the failed send again" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        failing <- newIORef False
+        let noop = return ()
+            sendS bs = do
+                f <- atomicModifyIORef' failing (\x -> (False, x))
+                when f $ E.throwIO $ E.ErrorCall "broken"
+                writePipeS pipe bs
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop sendS (readPipeS pipe)
+        cCtx <- contextNew cBackend cParams
+        sCtx <- contextNew sBackend sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        writeIORef failing True
+        E.try (sendData sCtx "abc") `shouldReturn` Left (E.ErrorCall "broken")
+        E.try (sendData sCtx "abc") `shouldReturn` Left (E.ErrorCall "broken")
 
     it "does not wait after a failed send" $ do
         (cParams, sParams) <- generate arbitraryPairParams13
