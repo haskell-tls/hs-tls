@@ -8,6 +8,8 @@
   [#663](https://github.com/haskell-tls/hs-tls/pull/663)
 * bye neither sends nor waits after a failed send.
   [#664](https://github.com/haskell-tls/hs-tls/pull/664)
+* Throw the exception of a failed send again on later sends.
+  [#665](https://github.com/haskell-tls/hs-tls/pull/665)
 
 ## Version 2.6.2
 
