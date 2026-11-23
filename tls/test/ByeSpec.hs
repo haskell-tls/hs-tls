@@ -43,6 +43,22 @@ spec = describe "bye" $ do
             `shouldReturn` Just ((), mempty)
         readIORef used `shouldReturn` True
 
+    it "sends close_notify when the backend gives up by itself" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        let noop = return ()
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop (writePipeS pipe) (readPipeS pipe)
+            -- e.g. on shutdown, without waiting for 'bye' to give up
+            shutdown = RecvWith $ \_ _ -> E.throwIO $ E.ErrorCall "shutdown"
+        cCtx <- contextNew (GivingUp cBackend shutdown) cParams
+        sCtx <- contextNew sBackend sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        timeout 5000000 (concurrently (bye cCtx) (recvData sCtx))
+            `shouldReturn` Just ((), mempty)
+        closeNotifyReceived sCtx `shouldReturn` True
+
     it "gives up on a receive over a socket" $ do
 #if MIN_VERSION_network(3,2,12)
         (cs, ss) <- N.socketPair N.AF_UNIX N.Stream N.defaultProtocol
