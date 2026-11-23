@@ -10,6 +10,8 @@
   [#664](https://github.com/haskell-tls/hs-tls/pull/664)
 * Throw the exception of a failed send again on later sends.
   [#665](https://github.com/haskell-tls/hs-tls/pull/665)
+* bye sends close_notify when the backend gives up by itself.
+  [#666](https://github.com/haskell-tls/hs-tls/pull/666)
 
 ## Version 2.6.2
 
