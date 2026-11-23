@@ -221,9 +221,9 @@ bye ctx = liftIO $ do
             void $
                 tryWithReadLock ctx $
                     recvHS13 ctx' chk `catchException` \e ->
-                        -- If the receive failed rather than gave up, the
-                        -- connection is gone and close_notify is not sent.
-                        when (isNothing (E.fromException @GaveUpRecv e)) $
+                        -- Only an IOException means that the connection is gone
+                        -- (see 'backendRecv'); otherwise close_notify is sent.
+                        when (isJust (E.fromException @E.IOException e)) $
                             setEOF ctx
 
 -- | Thrown by a receive in 'bye' which has given up, and caught there.
