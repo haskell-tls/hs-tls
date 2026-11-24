@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.6.4
+
+* An interrupted receive breaks the receive side and wakes PHA waiters.
+  [#668](https://github.com/haskell-tls/hs-tls/pull/668)
+
 ## Version 2.6.3
 
 * Never wrap around the RTT of a ticket, and cap it at 10 seconds.
