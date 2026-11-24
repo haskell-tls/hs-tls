@@ -84,7 +84,8 @@ handleException ctx f = catchException f $ \exception -> do
             _ -> Error_Misc (show exception)
     established <- ctxEstablished ctx
     setEstablished ctx NotEstablished
-    E.handle ignoreIOErr $ do
+    -- A failure of the send, whatever it is, must not skip 'setEOF'.
+    (`catchException` \_ -> return ()) $ do
         tls13 <- tls13orLater ctx
         if tls13
             then do
@@ -94,9 +95,6 @@ handleException ctx f = catchException f $ \exception -> do
                         Alert13 [errorToAlert tlserror]
             else sendPacket12 ctx $ Alert [errorToAlert tlserror]
     handshakeFailed tlserror
-  where
-    ignoreIOErr :: E.IOException -> IO ()
-    ignoreIOErr _ = return ()
 
 errorToAlert :: TLSError -> (AlertLevel, AlertDescription)
 errorToAlert (Error_Protocol _ ad) = (AlertLevel_Fatal, ad)
