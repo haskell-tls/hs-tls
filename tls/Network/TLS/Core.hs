@@ -43,6 +43,7 @@ import System.Timeout
 import Network.TLS.Context
 import Network.TLS.Context.Internal (
     PHAResult (..),
+    ctxTxBroken,
     incrementTLS13KeyUpdateCount,
     resetTLS13KeyUpdateCount,
  )
@@ -67,6 +68,7 @@ import Network.TLS.Types (
     Bulk (..),
     Cipher (..),
     HostName,
+    Millisecond,
     Role (..),
  )
 import Network.TLS.Util (catchException, mapChunks_)
@@ -121,10 +123,15 @@ handshake ctx = do
 rttFactor :: Int
 rttFactor = 3
 
+-- | An upper bound of the RTT measured in the handshake, which sets how
+-- long to wait for the peer.
+maxWaitRTT :: Millisecond
+maxWaitRTT = 1000
+
 getRTT :: Context -> IO Int
 getRTT ctx = do
     rtt <- tls13stRTT <$> getTLS13State ctx
-    let rtt' = max (fromIntegral rtt) 10
+    let rtt' = max 10 $ fromIntegral $ min maxWaitRTT rtt
     return (rtt' * rttFactor * 1000) -- ms to us
 
 -- | Notify the context that this side wants to close connection.
@@ -147,8 +154,10 @@ getRTT ctx = do
 bye :: MonadIO m => Context -> m ()
 bye ctx = liftIO $ do
     eof <- ctxEOF ctx
+    -- After a failed send, nothing is sent, so nothing is waited for either.
+    broken <- ctxTxBroken ctx
     tls13 <- tls13orLater ctx
-    when (tls13 && not eof) $ do
+    when (tls13 && not eof && not broken) $ do
         role <- usingState_ ctx getRole
         if role == ClientRole
             then do
@@ -196,8 +205,9 @@ bye_ ctx = liftIO $ do
     -- to wrap ctxEOF with it, so that function bye can still be called
     -- concurrently to a blocked recvData.
     eof <- ctxEOF ctx
+    broken <- ctxTxBroken ctx
     tls13 <- tls13orLater ctx
-    unless eof $
+    unless (eof || broken) $
         withWriteLock ctx $
             if tls13
                 then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
@@ -310,7 +320,7 @@ recvData12 ctx = do
     -- UserCanceled should be followed by a close_notify.
     -- fixme: is it safe to call recvData12?
     process (Alert [(AlertLevel_Warning, UserCanceled)]) = return B.empty
-    process (Alert [(AlertLevel_Warning, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx >> return B.empty
+    process (Alert [(AlertLevel_Warning, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> return B.empty
     process (Alert [(AlertLevel_Fatal, desc)]) = do
         setEOF ctx
         E.throwIO
@@ -359,7 +369,7 @@ recvData13 ctx = do
     -- closure ones are error alerts, even at the warning level.
     -- UserCanceled MUST be followed by a CloseNotify.
     process (Alert13 [(_, UserCanceled)]) = return B.empty
-    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx >> return B.empty
+    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> return B.empty
     process (Alert13 [(_, desc)]) = do
         setEOF ctx
         E.throwIO
@@ -498,7 +508,7 @@ recvHS13 ctx breakLoop = do
   where
     -- UserCanceled MUST be followed by a CloseNotify.
     process (Alert13 [(_, UserCanceled)]) = recvHS13 ctx breakLoop
-    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx
+    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx
     process (Alert13 [(_, _desc)]) = setEOF ctx
     process (Handshake13 hs bs) = do
         loopHandshake13 $ zip hs bs
@@ -597,7 +607,7 @@ notAligned = "received message not aligned with record boundary"
 -- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions
 tryBye :: Context -> IO ()
-tryBye ctx = catchException (bye_ ctx) (\_ -> return ())
+tryBye ctx = catchException (bye_ ctx) (\_ -> return ()) `E.finally` setEOF ctx
 
 onError
     :: Monad m
