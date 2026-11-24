@@ -48,6 +48,7 @@ import Network.TLS.Context.Internal (
     ctxTxBroken,
     incrementTLS13KeyUpdateCount,
     resetTLS13KeyUpdateCount,
+    wakePHA,
  )
 import Network.TLS.Extension
 import Network.TLS.Handshake
@@ -216,7 +217,7 @@ bye ctx = liftIO $ do
                     expired <- readTVarIO late
                     case r of
                         Right bs | B.length bs == n || not expired -> return bs
-                        _ -> E.throwIO GaveUpRecv
+                        _ -> E.throwIO $ PostHandshake $ Error_Misc "bye gave up receiving"
                 ctx' = ctx{ctxBackend = (ctxBackend ctx){backendRecv = recv}}
             void $
                 tryWithReadLock ctx $
@@ -226,11 +227,6 @@ bye ctx = liftIO $ do
                         when (isJust (E.fromException @E.IOException e)) $
                             setEOF ctx
 
--- | Thrown by a receive in 'bye' which has given up, and caught there.
-data GaveUpRecv = GaveUpRecv deriving (Show)
-
-instance E.Exception GaveUpRecv
-
 bye_ :: MonadIO m => Context -> m ()
 bye_ ctx = liftIO $ do
     -- Although setEOF is always protected by the read lock, here we don't try
@@ -239,12 +235,14 @@ bye_ ctx = liftIO $ do
     eof <- ctxEOF ctx
     broken <- ctxTxBroken ctx
     tls13 <- tls13orLater ctx
-    unless (eof || broken) $
-        E.handleJust vanished return $
-            withWriteLock ctx $
-                if tls13
-                    then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
-                    else sendPacket12 ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
+    -- No response to a post-handshake authentication is waited for.
+    (`E.finally` wakePHA ctx) $
+        unless (eof || broken) $
+            E.handleJust vanished return $
+                withWriteLock ctx $
+                    if tls13
+                        then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
+                        else sendPacket12 ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
   where
     -- The peer may have closed the connection without close_notify:
     -- EPIPE or ECONNRESET is then just the end of it.

@@ -222,6 +222,75 @@ spec = describe "bye" $ do
         E.try (sendData sCtx "abc") `shouldReturn` Left (E.ErrorCall "broken")
         E.try (sendData sCtx "abc") `shouldReturn` Left (E.ErrorCall "broken")
 
+    it "throws the exception of a receive interrupted inside a record again" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        failing <- newIORef False
+        let noop = return ()
+            -- only the body of a record, never its 5-byte header
+            recvS n = do
+                f <- readIORef failing
+                when (f && n /= 5) $ E.throwIO $ E.ErrorCall "interrupted"
+                readPipeS pipe n
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop (writePipeS pipe) recvS
+        cCtx <- contextNew cBackend cParams
+        sCtx <- contextNew sBackend sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        writeIORef failing True
+        sendData cCtx "abc"
+        E.try (recvData sCtx) `shouldReturn` Left (E.ErrorCall "interrupted")
+        writeIORef failing False
+        sendData cCtx "def"
+        timeout 1000000 (E.try (recvData sCtx))
+            `shouldReturn` Just (Left (E.ErrorCall "interrupted"))
+        -- close_notify can still be sent.
+        bye sCtx
+        timeout 1000000 (recvData cCtx) `shouldReturn` Just mempty
+
+    it "does not throw an asynchronous exception of an interrupted receive again" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        failing <- newIORef False
+        let noop = return ()
+            recvS n = do
+                f <- readIORef failing
+                when (f && n /= 5) $ E.throwIO E.ThreadKilled
+                readPipeS pipe n
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop (writePipeS pipe) recvS
+        cCtx <- contextNew cBackend cParams
+        sCtx <- contextNew sBackend sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        writeIORef failing True
+        sendData cCtx "abc"
+        E.try @E.AsyncException (recvData sCtx) `shouldReturn` Left E.ThreadKilled
+        timeout 1000000 (E.try @TLSException (recvData sCtx))
+            `shouldReturn` Just (Left (PostHandshake (Error_Misc "a previous receive failed")))
+
+    it "keeps receiving after an exception before a record" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        failing <- newIORef False
+        let noop = return ()
+            -- e.g. a timeout while waiting for the next record
+            recvS n = do
+                f <- atomicModifyIORef' failing (\x -> (False, x))
+                when f $ E.throwIO $ E.ErrorCall "timeout"
+                readPipeS pipe n
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop (writePipeS pipe) recvS
+        cCtx <- contextNew cBackend cParams
+        sCtx <- contextNew sBackend sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        writeIORef failing True
+        E.try (recvData sCtx) `shouldReturn` Left (E.ErrorCall "timeout")
+        sendData cCtx "abc"
+        timeout 1000000 (recvData sCtx) `shouldReturn` Just "abc"
+
     it "does not wait after a failed send" $ do
         (cParams, sParams) <- generate arbitraryPairParams13
         pipe <- newPipe

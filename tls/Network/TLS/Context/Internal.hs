@@ -26,6 +26,7 @@ module Network.TLS.Context.Internal (
     ctxCloseNotify,
     ctxTxBroken,
     ctxTxBrokenBy,
+    ctxRxBrokenBy,
     ctxEstablished,
     withLog,
     ctxWithHooks,
@@ -33,6 +34,9 @@ module Network.TLS.Context.Internal (
     setEOF,
     setCloseNotify,
     setTxBroken,
+    setRxBroken,
+    wakePHA,
+    throwBroken,
     setEstablished,
     skipEarlyData,
     contextFlush,
@@ -145,6 +149,8 @@ data Context
     , ctxTxBroken_ :: IORef (Maybe E.SomeException)
     -- ^ the exception of the first failed send, which left the TX record
     -- state ahead of the peer.
+    , ctxRxBroken_ :: IORef (Maybe E.SomeException)
+    -- ^ the exception which interrupted a receive inside a record.
     , ctxEstablished_ :: IORef Established
     -- ^ has the handshake been done and been successful.
     , ctxTxRecordState :: MVar RecordState
@@ -433,7 +439,11 @@ ctxEOF ctx = readIORef $ ctxEOF_ ctx
 setEOF :: Context -> IO ()
 setEOF ctx = do
     writeIORef (ctxEOF_ ctx) True
-    -- Wake up those waiting for a pending post-handshake authentication.
+    wakePHA ctx
+
+-- | Wake up those waiting for a pending post-handshake authentication.
+wakePHA :: Context -> IO ()
+wakePHA ctx = do
     mpha <- tls13stPHA <$> readIORef (ctxTLS13State ctx)
     forM_ mpha $ \(mv, err) -> void $ tryPutMVar mv $ PHAFailed err
 
@@ -451,6 +461,22 @@ ctxTxBrokenBy ctx = readIORef $ ctxTxBroken_ ctx
 
 setTxBroken :: Context -> E.SomeException -> IO ()
 setTxBroken ctx e = atomicModifyIORef' (ctxTxBroken_ ctx) $ \m -> (m <|> Just e, ())
+
+ctxRxBrokenBy :: Context -> IO (Maybe E.SomeException)
+ctxRxBrokenBy ctx = readIORef $ ctxRxBroken_ ctx
+
+-- | Throw again the exception which broke a direction.  An asynchronous
+-- one was meant for the thread which got it, so it is replaced.
+throwBroken :: String -> E.SomeException -> IO a
+throwBroken msg e = E.throwIO $ case E.fromException e of
+    Just (E.SomeAsyncException _) -> E.toException $ PostHandshake $ Error_Misc msg
+    Nothing -> e
+
+-- | The stream is left inside a record, so nothing more can be received.
+setRxBroken :: Context -> E.SomeException -> IO ()
+setRxBroken ctx e = do
+    atomicModifyIORef' (ctxRxBroken_ ctx) $ \m -> (m <|> Just e, ())
+    wakePHA ctx
 
 ctxEstablished :: Context -> IO Established
 ctxEstablished ctx = readIORef $ ctxEstablished_ ctx

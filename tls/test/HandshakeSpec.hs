@@ -310,6 +310,10 @@ spec = do
             post_handshake_auth_async_wait False
         it "fails the waiter when the transport breaks" $
             post_handshake_auth_async_reset
+        it "fails the waiter when a receive is interrupted inside a record" $
+            post_handshake_auth_async_interrupted
+        it "fails the waiter when the server says bye" $
+            post_handshake_auth_async_bye
         it "closes the connection when a synchronous post-handshake auth fails" $
             post_handshake_auth_sync_fail
         it "commits the client certificate of a post-handshake auth at Finished" $
@@ -3565,6 +3569,50 @@ post_handshake_auth_async_reset = do
     writeIORef broken True
     void (recvData sCtx) `shouldThrow` anyIOException
     timeout 1000000 (check True) >>= (`shouldSatisfy` isFailed)
+  where
+    isFailed (Just (PHAFailed _)) = True
+    isFailed _ = False
+
+-- | A receive is interrupted by an exception inside a record while a
+-- response is pending: the waiter fails instead of blocking forever.
+post_handshake_auth_async_interrupted :: IO ()
+post_handshake_auth_async_interrupted = do
+    params <- generate arbitraryPairParams13
+    cred <- generate arbitraryPHACredential
+    let (cParams, sParams) = phaParams True cred params
+    pipe <- newPipe
+    _ <- runPipe pipe
+    broken <- newIORef False
+    let noop = return ()
+        -- only the body of a record, never its 5-byte header
+        sRecv n = do
+            b <- readIORef broken
+            if b && n /= 5 then E.throwIO (E.ErrorCall "interrupted") else readPipeS pipe n
+        cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+        sBackend = Backend noop noop (writePipeS pipe) sRecv
+    cCtx <- contextNew cBackend cParams
+    sCtx <- contextNew sBackend sParams
+    concurrently_ (handshake cCtx) (handshake sCtx)
+    check <- requestCertificateAsync sCtx
+    writeIORef broken True
+    sendData cCtx "request"
+    void (recvData sCtx) `shouldThrow` errorCall "interrupted"
+    timeout 1000000 (check True) >>= (`shouldSatisfy` isFailed)
+  where
+    isFailed (Just (PHAFailed _)) = True
+    isFailed _ = False
+
+-- | The server says bye while a response is pending and nobody reads: the
+-- waiter fails instead of blocking forever.
+post_handshake_auth_async_bye :: IO ()
+post_handshake_auth_async_bye = do
+    params <- generate arbitraryPairParams13
+    cred <- generate arbitraryPHACredential
+    withPairContext (phaParams True cred params) $ \(cCtx, sCtx) -> do
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        check <- requestCertificateAsync sCtx
+        bye sCtx
+        timeout 1000000 (check True) >>= (`shouldSatisfy` isFailed)
   where
     isFailed (Just (PHAFailed _)) = True
     isFailed _ = False

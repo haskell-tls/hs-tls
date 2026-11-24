@@ -175,6 +175,7 @@ contextNew backend params = liftIO $ do
     eof <- newIORef False
     closeNotify <- newIORef False
     txBroken <- newIORef Nothing
+    rxBroken <- newIORef Nothing
     established <- newIORef NotEstablished
     stats <- newIORef newMeasurement
     needEmptyPacket <- newIORef False
@@ -217,6 +218,7 @@ contextNew backend params = liftIO $ do
                 , ctxEOF_ = eof
                 , ctxCloseNotify_ = closeNotify
                 , ctxTxBroken_ = txBroken
+                , ctxRxBroken_ = rxBroken
                 , ctxEstablished_ = established
                 , ctxNeedEmptyPacket = needEmptyPacket
                 , ctxHooks = hooks
