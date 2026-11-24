@@ -1,5 +1,16 @@
 # Change log for "tls"
 
+## Version 2.5.5
+
+* Never wrap around the RTT of a ticket, and cap it at 10 seconds.
+  [#661](https://github.com/haskell-tls/hs-tls/pull/661)
+* Keep contexts closable after failures of the backend.
+  [#663](https://github.com/haskell-tls/hs-tls/pull/663)
+* bye neither sends nor waits after a failed send.
+  [#664](https://github.com/haskell-tls/hs-tls/pull/664)
+* Throw the exception of a failed send again on later sends.
+  [#665](https://github.com/haskell-tls/hs-tls/pull/665)
+
 ## Version 2.5.4
 
 * Use up a session for 0-RTT only after checking the ClientHello.
