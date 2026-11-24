@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+
 -- | TLS record layer in Rx direction
 module Network.TLS.Record.Recv (
     recvRecord12,
@@ -51,7 +53,7 @@ recvRecord12
     -- ^ TLS context
     -> IO (Either TLSError (Record Plaintext))
 recvRecord12 ctx =
-    readExactBytes ctx 5
+    readExactBytes ctx False 5
         >>= either (return . Left) (recvLengthE . (decodeHeader >=> checkType))
   where
     recvLengthE = either (return . Left) recvLength
@@ -67,12 +69,12 @@ recvRecord12 ctx =
         if exceedsTLSCiphertext 2048 readlen
             then return $ Left maximumSizeExceeded
             else
-                readExactBytes ctx (fromIntegral readlen)
+                readExactBytes ctx True (fromIntegral readlen)
                     >>= either (return . Left) (getRecord ctx header)
 
 recvRecord13 :: Context -> IO (Either TLSError (Record Plaintext))
 recvRecord13 ctx =
-    readExactBytes ctx 5
+    readExactBytes ctx False 5
         >>= either (return . Left) (recvLengthE . (decodeHeader >=> checkType))
   where
     recvLengthE = either (return . Left) recvLength
@@ -89,7 +91,7 @@ recvRecord13 ctx =
         if exceedsTLSCiphertext 256 readlen
             then return $ Left maximumSizeExceeded
             else
-                readExactBytes ctx (fromIntegral readlen)
+                readExactBytes ctx True (fromIntegral readlen)
                     >>= either (return . Left) (getRecord13 header)
     -- RFC 9846 Section 4.2.10: a server that rejected early data skips the
     -- records it cannot deprotect, until the first one it can.
@@ -130,10 +132,9 @@ checkType header@(Header ty _ _)
 
 ----------------------------------------------------------------
 
-readExactBytes :: Context -> Int -> IO (Either TLSError ByteString)
-readExactBytes ctx sz = do
-    -- A broken transport ends the connection, which also wakes up those
-    -- waiting for a post-handshake authentication.
+readExactBytes :: Context -> Bool -> Int -> IO (Either TLSError ByteString)
+readExactBytes ctx inRecord sz = do
+    ctxRxBrokenBy ctx >>= mapM_ (throwBroken "a previous receive failed")
     hdrbs <- contextRecv ctx sz `E.catch` broken
     if B.length hdrbs == sz
         then return $ Right hdrbs
@@ -150,5 +151,11 @@ readExactBytes ctx sz = do
                                 ++ show (B.length hdrbs)
                             )
   where
-    broken :: E.IOException -> IO a
-    broken e = setEOF ctx >> E.throwIO e
+    -- A broken transport ends the connection.  Another exception inside a
+    -- record leaves the stream there, so later receives fail at once.
+    -- Both wake up those waiting for a post-handshake authentication.
+    broken :: E.SomeException -> IO a
+    broken e
+        | isJust (E.fromException @E.IOException e) = setEOF ctx >> E.throwIO e
+        | inRecord = setRxBroken ctx e >> E.throwIO e
+        | otherwise = E.throwIO e

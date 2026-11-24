@@ -42,7 +42,8 @@ data Backend = Backend
     -- exceptions, including asynchronous ones, pass through as they are,
     -- and 'Network.TLS.bye' can still send close_notify.  'Network.TLS.recvData'
     -- may be called again only if the exception was thrown before any byte
-    -- of a record was taken; otherwise the stream is left inside the record.
+    -- of a record was taken.  Thrown inside the body of a record, it is
+    -- thrown again by later receives (an asynchronous one as a TLS error).
     }
 
 -- | Types which a 'Network.TLS.Context' can be created on.

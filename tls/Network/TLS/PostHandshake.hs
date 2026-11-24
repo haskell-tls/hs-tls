@@ -41,11 +41,11 @@ requestCertificate ctx =
 -- pending.  'Network.TLS.getClientCertificateChain' gives the authenticated chain.
 -- Server only.
 --
--- The blocking wait ends with the response or with the end of the
--- connection, e.g. a received alert or an 'Control.Exception.IOException'
--- from the backend.  It waits as long as the client does not respond,
--- and while 'Network.TLS.recvData' is stopped by another exception, so
--- put a timeout on it if needed.
+-- The blocking wait ends with the response, with the end of the
+-- connection, e.g. a received alert, an 'Control.Exception.IOException'
+-- from the backend or 'Network.TLS.bye', or with an exception inside a
+-- record.  It waits as long as the client does not respond, and while
+-- 'Network.TLS.recvData' is not called, so put a timeout on it if needed.
 requestCertificateAsync :: Context -> IO (Bool -> IO PHAResult)
 requestCertificateAsync ctx =
     checkValid ctx >> doRequestCertificateAsync_ (ctxRoleParams ctx) ctx
