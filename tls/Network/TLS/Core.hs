@@ -11,7 +11,9 @@ module Network.TLS.Core (
 
     -- * Initialisation and Termination of context
     bye,
+    byeWith,
     handshake,
+    handshakeWith,
 
     -- * Application Layer Protocol Negotiation
     getNegotiatedProtocol,
@@ -21,7 +23,9 @@ module Network.TLS.Core (
 
     -- * High level API
     sendData,
+    sendDataWith,
     recvData,
+    recvDataWith,
     recvData',
     closeNotifyReceived,
     updateKey,
@@ -41,14 +45,21 @@ import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import GHC.IO.Exception (IOErrorType (..), IOException (..))
 
-import Network.TLS.Backend (Backend (..), RecvWith (..), SendWith (..))
 import Network.TLS.Context
 import Network.TLS.Context.Internal (
+    GaveUp (..),
+    GiveUp (..),
     PHAResult (..),
     ctxTxBroken,
+    gaveUpSending,
     incrementTLS13KeyUpdateCount,
     resetTLS13KeyUpdateCount,
     wakePHA,
+    withRWLockGivingUp,
+    withReadLockGivingUp,
+    withRxGiveUp,
+    withTxGiveUp,
+    withWriteLockGivingUp,
  )
 import Network.TLS.Extension
 import Network.TLS.Handshake
@@ -80,51 +91,112 @@ import Network.TLS.Util (catchException, mapChunks_)
 -- This is to be called at the beginning of a connection, and during renegotiation.
 -- Don't use this function as the acquire resource of 'Control.Exception.bracket'.
 handshake :: MonadIO m => Context -> m ()
-handshake ctx = do
+handshake ctx = liftIO $ do
     handshake_ ctx
     -- Trying to receive an alert of client authentication failure
-    liftIO $ do
-        role <- usingState_ ctx getRole
-        tls13 <- tls13orLater ctx
-        sentClientCert <- tls13stSentClientCert <$> getTLS13State ctx
-        when (role == ClientRole && tls13 && sentClientCert) $ do
-            rtt <- getRTT ctx
-            -- We are only willing to wait 'rtt' for the alert, but a receive
-            -- must not be abandoned once it has started.  Records are read
-            -- length-prefixed and the record layer keeps no receive buffer, so
-            -- an aborted receive loses the bytes it has already taken off the
-            -- transport and leaves the stream positioned inside a record.
-            -- Every later read is then misframed, and the connection is dead
-            -- with a spurious protocol error.
-            --
-            -- So the receive runs in its own thread and we stop waiting for it
-            -- rather than interrupting it.  It holds the read lock, which keeps
-            -- it the only reader and makes the next receive wait for it to
-            -- finish; its outcome is left in 'tls13stPendingRecv' for that
-            -- receive to pick up.
-            done <- newEmptyTMVarIO
-            void $ forkIO $ withReadLock ctx $ do
-                r <- E.try $ recvData13 ctx
-                modifyTLS13State ctx $ \st ->
-                    st
-                        { tls13stPendingRecv = case r of
-                            Right dat -> PendingRecvData dat
-                            Left err -> PendingRecvError err
-                        }
-                atomically $ putTMVar done ()
-            late <- registerDelay rtt
-            arrived <-
-                atomically $
-                    (Just <$> takeTMVar done) `orElse` (Nothing <$ (readTVar late >>= check))
-            -- Still report the authentication failure from 'handshake' itself
-            -- whenever it did arrive in time.
-            when (isJust arrived) $ do
-                pending <- tls13stPendingRecv <$> getTLS13State ctx
-                case pending of
-                    PendingRecvError err -> do
-                        modifyTLS13State ctx $ \st -> st{tls13stPendingRecv = NoPendingRecv}
-                        E.throwIO err
-                    _ -> return ()
+    authFailureExpected ctx >>= \expected -> when expected $ waitAuthFailure ctx
+
+-- | 'handshake' which gives up once the 'STM' action succeeds, also while
+-- waiting for the locks or in a send.  After 'Left', the context cannot be
+-- used.  With a backend which can neither give up on a receive nor on a
+-- send, only the wait for the locks is given up on.
+--
+-- @since 2.6.4
+handshakeWith :: MonadIO m => Context -> STM a -> m (Either a ())
+handshakeWith ctx giveUp = liftIO $ do
+    (giveUp', given) <- recording giveUp
+    r <-
+        E.try $
+            withRWLockGivingUp ctx giveUp $
+                withTxGiveUp ctx giveUp' $
+                    withRxGiveUp ctx (GiveUp giveUp' giveUp') $
+                        handshakeLocked ctx
+    case r of
+        Left e -> given >>= maybe (E.throwIO (e :: E.SomeException)) (return . Left)
+        Right (Left a) -> return $ Left a
+        Right (Right ()) -> do
+            expected <- authFailureExpected ctx
+            if not expected
+                then return $ Right ()
+                else case ctxBackendRecvWith ctx of
+                    Nothing -> Right <$> waitAuthFailure ctx
+                    Just _ -> waitAuthFailureGivingUp ctx giveUp' given
+
+-- | Recording what the 'STM' action gave, for one which has given up.
+recording :: STM a -> IO (STM (), IO (Maybe a))
+recording giveUp = do
+    var <- newTVarIO Nothing
+    return (giveUp >>= writeTVar var . Just, readTVarIO var)
+
+authFailureExpected :: Context -> IO Bool
+authFailureExpected ctx = do
+    role <- usingState_ ctx getRole
+    tls13 <- tls13orLater ctx
+    sentClientCert <- tls13stSentClientCert <$> getTLS13State ctx
+    return $ role == ClientRole && tls13 && sentClientCert
+
+-- | Waiting 'rtt' for an alert of client authentication failure.
+waitAuthFailure :: Context -> IO ()
+waitAuthFailure ctx = do
+    rtt <- getRTT ctx
+    -- We are only willing to wait 'rtt' for the alert, but a receive
+    -- must not be abandoned once it has started.  Records are read
+    -- length-prefixed and the record layer keeps no receive buffer, so
+    -- an aborted receive loses the bytes it has already taken off the
+    -- transport and leaves the stream positioned inside a record.
+    -- Every later read is then misframed, and the connection is dead
+    -- with a spurious protocol error.
+    --
+    -- So the receive runs in its own thread and we stop waiting for it
+    -- rather than interrupting it.  It holds the read lock, which keeps
+    -- it the only reader and makes the next receive wait for it to
+    -- finish; its outcome is left in 'tls13stPendingRecv' for that
+    -- receive to pick up.
+    done <- newEmptyTMVarIO
+    void $ forkIO $ withReadLock ctx $ do
+        r <- E.try $ recvData13 ctx
+        modifyTLS13State ctx $ \st ->
+            st
+                { tls13stPendingRecv = case r of
+                    Right dat -> PendingRecvData dat
+                    Left err -> PendingRecvError err
+                }
+        atomically $ putTMVar done ()
+    late <- registerDelay rtt
+    arrived <-
+        atomically $
+            (Just <$> takeTMVar done) `orElse` (Nothing <$ (readTVar late >>= check))
+    -- Still report the authentication failure from 'handshake' itself
+    -- whenever it did arrive in time.
+    when (isJust arrived) $ do
+        pending <- tls13stPendingRecv <$> getTLS13State ctx
+        case pending of
+            PendingRecvError err -> do
+                modifyTLS13State ctx $ \st -> st{tls13stPendingRecv = NoPendingRecv}
+                E.throwIO err
+            _ -> return ()
+
+-- | 'waitAuthFailure' with a backend which can give up: no thread, since
+-- the receive gives up only before a record begins.  Once begun, only the
+-- caller's give-up ends it, and the context cannot be used then.
+waitAuthFailureGivingUp :: Context -> STM () -> IO (Maybe a) -> IO (Either a ())
+waitAuthFailureGivingUp ctx giveUp given = do
+    rtt <- getRTT ctx
+    late <- registerDelay rtt
+    let between = (readTVar late >>= check) `orElse` giveUp
+    r <-
+        withReadLockGivingUp ctx giveUp $
+            withRxGiveUp ctx (GiveUp between giveUp) $
+                E.try $
+                    recvData13 ctx
+    case r of
+        Left () -> return $ Right ()
+        Right (Right dat) -> do
+            modifyTLS13State ctx $ \st -> st{tls13stPendingRecv = PendingRecvData dat}
+            return $ Right ()
+        Right (Left e)
+            | isJust (E.fromException @GaveUp e) -> return $ Right ()
+            | otherwise -> given >>= maybe (E.throwIO e) (return . Left)
 
 rttFactor :: Int
 rttFactor = 3
@@ -160,7 +232,15 @@ getRTT ctx = do
 -- >   handshake ctx
 -- >   ...
 bye :: MonadIO m => Context -> m ()
-bye ctx = liftIO $ do
+bye ctx = byeWith ctx (retry :: STM ())
+
+-- | 'bye' which also gives up once the 'STM' action succeeds, on the
+-- peer's last handshake messages and on close_notify alike.
+--
+-- @since 2.6.4
+byeWith :: MonadIO m => Context -> STM a -> m ()
+byeWith ctx giveUp0 = liftIO $ do
+    let giveUp = void giveUp0
     eof <- ctxEOF ctx
     -- After a failed send, nothing is sent, so nothing is waited for either.
     broken <- ctxTxBroken ctx
@@ -169,13 +249,13 @@ bye ctx = liftIO $ do
         role <- usingState_ ctx getRole
         if role == ClientRole
             then do
-                withWriteLock ctx $ sendCFifNecessary ctx
+                sending ctx giveUp $ sendCFifNecessary ctx
                 -- receiving NewSessionTicket
                 let chk = tls13stRecvNST <$> getTLS13State ctx
                 recvNST <- chk
                 unless recvNST $ do
                     rtt <- getRTT ctx
-                    tryRecvHS13 rtt chk
+                    tryRecvHS13 giveUp rtt chk
             else do
                 -- receiving Client Finished
                 let chk = tls13stRecvCF <$> getTLS13State ctx
@@ -184,8 +264,8 @@ bye ctx = liftIO $ do
                     -- no chance to measure RTT before receiving CF
                     -- fixme: 1sec is good enough?
                     let rtt = 1000000
-                    tryRecvHS13 rtt chk
-    bye_ ctx
+                    tryRecvHS13 giveUp rtt chk
+    bye_ ctx giveUp
   where
     -- Receiving these messages only improves the chances of a later session
     -- resumption, so giving up on them costs nothing important.  We give up in
@@ -206,30 +286,23 @@ bye ctx = liftIO $ do
     --
     -- A backend which can give up on a receive does so after 'rtt'; with
     -- one which cannot, the messages are not waited for at all.
-    tryRecvHS13 :: Int -> IO Bool -> IO ()
-    tryRecvHS13 rtt chk = case ctxBackendRecvWith ctx of
+    tryRecvHS13 :: STM () -> Int -> IO Bool -> IO ()
+    tryRecvHS13 giveUp rtt chk = case ctxBackendRecvWith ctx of
         Nothing -> return ()
-        Just (RecvWith recvWith) -> do
+        Just _ -> do
             late <- registerDelay rtt
-            let giveUp = readTVar late >>= check
-                -- Bytes received before giving up are not the end of the stream.
-                recv n = do
-                    r <- recvWith n giveUp
-                    expired <- readTVarIO late
-                    case r of
-                        Right bs | B.length bs == n || not expired -> return bs
-                        _ -> E.throwIO $ PostHandshake $ Error_Misc "bye gave up receiving"
-                ctx' = ctx{ctxBackend = (ctxBackend ctx){backendRecv = recv}}
+            let g = (readTVar late >>= check) `orElse` giveUp
             void $
                 tryWithReadLock ctx $
-                    recvHS13 ctx' chk `catchException` \e ->
-                        -- Only an IOException means that the connection is gone
-                        -- (see 'backendRecv'); otherwise close_notify is sent.
-                        when (isJust (E.fromException @E.IOException e)) $
-                            setEOF ctx
+                    withRxGiveUp ctx (GiveUp g g) $
+                        recvHS13 ctx chk `catchException` \e ->
+                            -- Only an IOException means that the connection is gone
+                            -- (see 'backendRecv'); otherwise close_notify is sent.
+                            when (isJust (E.fromException @E.IOException e)) $
+                                setEOF ctx
 
-bye_ :: MonadIO m => Context -> m ()
-bye_ ctx = liftIO $ do
+bye_ :: Context -> STM () -> IO ()
+bye_ ctx giveUp = do
     -- Although setEOF is always protected by the read lock, here we don't try
     -- to wrap ctxEOF with it, so that function bye can still be called
     -- concurrently to a blocked recvData.
@@ -239,33 +312,28 @@ bye_ ctx = liftIO $ do
     -- No response to a post-handshake authentication is waited for.
     (`E.finally` wakePHA ctx) $
         unless (eof || broken) $
-            E.handleJust ignorable return $
-                withWriteLock ctx $ do
-                    ctx' <- givingUpSend
-                    if tls13
-                        then sendPacket13 ctx' $ Alert13 [(AlertLevel_Warning, CloseNotify)]
-                        else sendPacket12 ctx' $ Alert [(AlertLevel_Warning, CloseNotify)]
+            sending ctx giveUp $
+                if tls13
+                    then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
+                    else sendPacket12 ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
+
+-- | A send of 'bye', with the write lock: given up on, as is the wait for
+-- the lock, after a second or after 'rtt' if longer, or with the 'STM'
+-- action.  With a backend which cannot give up on a send, it may block.
+-- The peer may have closed the connection without close_notify: EPIPE or
+-- ECONNRESET is then just the end of it.
+sending :: Context -> STM () -> IO () -> IO ()
+sending ctx giveUp send = E.handleJust ignorable return $ do
+    rtt <- getRTT ctx
+    late <- registerDelay $ max 1000000 rtt
+    let g = (readTVar late >>= check) `orElse` giveUp
+    void $ withWriteLockGivingUp ctx g $ withTxGiveUp ctx g send
   where
-    -- The peer may have closed the connection without close_notify:
-    -- EPIPE or ECONNRESET is then just the end of it.  A peer which does
-    -- not read is given up on.
     ignorable :: E.SomeException -> Maybe ()
     ignorable e
         | Just ioe <- E.fromException e, ioe_type ioe == ResourceVanished = Just ()
-        | Just (PostHandshake err) <- E.fromException e, err == gaveUpSending = Just ()
+        | Just e' <- E.fromException e, e' == gaveUpSending = Just ()
         | otherwise = Nothing
-    gaveUpSending = Error_Misc "bye gave up sending"
-    -- A backend which can give up on a send does so after a second, or
-    -- after 'rtt' if longer; with one which cannot, the send may block.
-    givingUpSend = case ctxBackendSendWith ctx of
-        Nothing -> return ctx
-        Just (SendWith sendWith) -> do
-            rtt <- getRTT ctx
-            late <- registerDelay $ max 1000000 rtt
-            let send bs =
-                    sendWith bs (readTVar late >>= check)
-                        >>= either (\_ -> E.throwIO $ PostHandshake gaveUpSending) return
-            return ctx{ctxBackend = (ctxBackend ctx){backendSend = send}}
 
 -- | If the ALPN extension has been used, this will
 -- return the protocol agreed upon.
@@ -296,27 +364,58 @@ sendData :: MonadIO m => Context -> L.ByteString -> m ()
 sendData _ "" = return ()
 sendData ctx dataToSend = liftIO $ do
     tls13 <- tls13orLater ctx
-    let sendP bs
-            | tls13 = do
-                updateKeyBeforeLimit ctx
-                sendPacket13 ctx $ AppData13 bs
-                -- a KeyUpdate requested from now on is answered again
-                modifyTLS13State ctx $ \st -> st{tls13stKeyUpdateResponded = False}
-                role <- usingState_ ctx getRole
-                sentCF <- tls13stSentCF <$> getTLS13State ctx
-                rtt0 <- tls13st0RTT <$> getTLS13State ctx
-                when (role == ClientRole && rtt0 && not sentCF) $
-                    modifyTLS13State ctx $
-                        \st -> st{tls13stPendingSentData = tls13stPendingSentData st . (bs :)}
-            | otherwise = sendPacket12 ctx $ AppData bs
     when tls13 $ withWriteLock ctx $ sendCFifNecessary ctx
-    withWriteLock ctx $ do
-        checkValid ctx
-        -- All chunks are protected with the same write lock because we don't
-        -- want to interleave writes from other threads in the middle of our
-        -- possibly large write.
-        mlen <- getPeerRecordLimit ctx -- plaintext, don't adjust for TLS 1.3
-        mapM_ (mapChunks_ mlen sendP) (L.toChunks dataToSend)
+    withWriteLock ctx $ sendDataLocked ctx tls13 dataToSend
+
+-- | 'sendData' which gives up once the 'STM' action succeeds, also while
+-- waiting for the write lock.  Given up on before anything is sent, the
+-- context can still be used.  Given up on after that, part of the data
+-- may have been sent, and how much is not known, so later sends throw.
+-- With a backend which cannot give up on a send, only the wait for the
+-- lock is given up on.
+--
+-- @since 2.6.4
+sendDataWith :: MonadIO m => Context -> L.ByteString -> STM a -> m (Either a ())
+sendDataWith _ "" _ = return $ Right ()
+sendDataWith ctx dataToSend giveUp = liftIO $ do
+    early <- atomically $ (Just <$> giveUp) `orElse` return Nothing
+    case early of
+        Just a -> return $ Left a
+        Nothing -> do
+            tls13 <- tls13orLater ctx
+            (giveUp', given) <- recording giveUp
+            withWriteLockGivingUp ctx giveUp (withTxGiveUp ctx giveUp' (send tls13))
+                `E.catch` \e ->
+                    if e == gaveUpSending
+                        then given >>= maybe (E.throwIO e) (return . Left)
+                        else E.throwIO e
+  where
+    send tls13 = do
+        when tls13 $ sendCFifNecessary ctx
+        sendDataLocked ctx tls13 dataToSend
+
+sendDataLocked :: Context -> Bool -> L.ByteString -> IO ()
+sendDataLocked ctx tls13 dataToSend = do
+    checkValid ctx
+    -- All chunks are protected with the same write lock because we don't
+    -- want to interleave writes from other threads in the middle of our
+    -- possibly large write.
+    mlen <- getPeerRecordLimit ctx -- plaintext, don't adjust for TLS 1.3
+    mapM_ (mapChunks_ mlen sendP) (L.toChunks dataToSend)
+  where
+    sendP bs
+        | tls13 = do
+            updateKeyBeforeLimit ctx
+            sendPacket13 ctx $ AppData13 bs
+            -- a KeyUpdate requested from now on is answered again
+            modifyTLS13State ctx $ \st -> st{tls13stKeyUpdateResponded = False}
+            role <- usingState_ ctx getRole
+            sentCF <- tls13stSentCF <$> getTLS13State ctx
+            rtt0 <- tls13st0RTT <$> getTLS13State ctx
+            when (role == ClientRole && rtt0 && not sentCF) $
+                modifyTLS13State ctx $
+                    \st -> st{tls13stPendingSentData = tls13stPendingSentData st . (bs :)}
+        | otherwise = sendPacket12 ctx $ AppData bs
 
 -- RFC 9846 Section 5.5: the keys are updated before the records sent
 -- under them reach the limit.  Early data cannot do so and stops there.
@@ -364,6 +463,24 @@ recvData ctx = liftIO $ do
         -- will impact the validity of the context.
         if tls13 then recvData13 ctx else recvData12 ctx
 
+-- | 'recvData' which gives up once the 'STM' action succeeds, also while
+-- waiting for the read lock.  It gives up only between records, and the
+-- context can still be used then.  A record which has begun is read to
+-- its end unless the 'STM' action succeeds meanwhile: then it throws, and
+-- so do later receives.  With a backend which cannot give up on a
+-- receive, only the wait for the lock is given up on.
+--
+-- @since 2.6.4
+recvDataWith :: MonadIO m => Context -> STM a -> m (Either a ByteString)
+recvDataWith ctx giveUp = liftIO $ do
+    tls13 <- tls13orLater ctx
+    (giveUp', given) <- recording giveUp
+    fmap join $ withReadLockGivingUp ctx giveUp $ do
+        checkValid ctx
+        withRxGiveUp ctx (GiveUp giveUp' giveUp') $
+            (Right <$> if tls13 then recvData13 ctx else recvData12 ctx)
+                `E.catch` \GaveUp -> given >>= maybe (E.throwIO GaveUp) (return . Left)
+
 recvData12 :: Context -> IO ByteString
 recvData12 ctx = do
     pending <- atomicModifyIORef' (ctxPendingAppData ctx) $ \xs -> ([], reverse xs)
@@ -372,9 +489,9 @@ recvData12 ctx = do
         else return $ B.concat pending
   where
     process (Handshake [ch@ClientHello{}] [b]) =
-        handshakeWith ctx (ch, b) >> recvData12 ctx
+        renegotiate ctx (ch, b) >> recvData12 ctx
     process (Handshake [hr@HelloRequest] [b]) =
-        handshakeWith ctx (hr, b) >> recvData12 ctx
+        renegotiate ctx (hr, b) >> recvData12 ctx
     -- UserCanceled should be followed by a close_notify.
     -- fixme: is it safe to call recvData12?
     process (Alert [(AlertLevel_Warning, UserCanceled)]) = return B.empty
@@ -665,7 +782,7 @@ notAligned = "received message not aligned with record boundary"
 -- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions
 tryBye :: Context -> IO ()
-tryBye ctx = catchException (bye_ ctx) (\_ -> return ()) `E.finally` setEOF ctx
+tryBye ctx = catchException (bye_ ctx retry) (\_ -> return ()) `E.finally` setEOF ctx
 
 onError
     :: Monad m

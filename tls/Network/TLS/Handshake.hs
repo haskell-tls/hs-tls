@@ -1,6 +1,7 @@
 module Network.TLS.Handshake (
     handshake_,
-    handshakeWith,
+    handshakeLocked,
+    renegotiate,
     handshakeClientWith,
     handshakeServerWith,
     handshakeClient,
@@ -16,17 +17,18 @@ import Network.TLS.Struct
 import Control.Monad.State.Strict
 
 handshake_ :: MonadIO m => Context -> m ()
-handshake_ ctx =
-    liftIO $
-        withRWLock ctx $
-            handleException ctx (doHandshake_ (ctxRoleParams ctx) ctx)
+handshake_ ctx = liftIO $ withRWLock ctx $ handshakeLocked ctx
+
+-- | 'handshake_' with the read and write locks taken already.
+handshakeLocked :: Context -> IO ()
+handshakeLocked ctx = handleException ctx (doHandshake_ (ctxRoleParams ctx) ctx)
 
 -- Handshake when requested by the remote end
 -- This is called automatically by 'recvData', in a context where the read lock
 -- is already taken.  So contrary to 'handshake' above, here we only need to
 -- call withWriteLock.
-handshakeWith :: MonadIO m => Context -> HandshakeR -> m ()
-handshakeWith ctx hsr =
+renegotiate :: MonadIO m => Context -> HandshakeR -> m ()
+renegotiate ctx hsr =
     liftIO $
         withWriteLock ctx $
             handleException ctx $

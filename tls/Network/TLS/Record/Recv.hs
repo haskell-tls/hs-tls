@@ -6,12 +6,16 @@ module Network.TLS.Record.Recv (
     recvRecord13,
 ) where
 
+import Control.Concurrent.STM
 import qualified Control.Exception as E
 import qualified Data.ByteString as B
+import Data.IORef
 
+import Network.TLS.Backend
 import Network.TLS.Context.Internal
 import Network.TLS.Hooks
 import Network.TLS.Imports
+import Network.TLS.Measurement
 import Network.TLS.Packet
 import Network.TLS.Record
 import Network.TLS.Struct
@@ -135,7 +139,8 @@ checkType header@(Header ty _ _)
 readExactBytes :: Context -> Bool -> Int -> IO (Either TLSError ByteString)
 readExactBytes ctx inRecord sz = do
     ctxRxBrokenBy ctx >>= mapM_ (throwBroken "a previous receive failed")
-    hdrbs <- contextRecv ctx sz `E.catch` broken
+    mgiveUp <- readIORef $ ctxRxGiveUp ctx
+    hdrbs <- recv mgiveUp `E.catch` broken
     if B.length hdrbs == sz
         then return $ Right hdrbs
         else do
@@ -151,11 +156,40 @@ readExactBytes ctx inRecord sz = do
                                 ++ show (B.length hdrbs)
                             )
   where
+    recv mgiveUp = case (mgiveUp, ctxBackendRecvWith ctx) of
+        (Just giveUp, Just (RecvWith recvWith)) -> do
+            updateMeasure ctx $ addBytesReceived sz
+            let inside n = do
+                    r <- recvWith n $ giveUpInside giveUp
+                    gaveUp <- fired $ giveUpInside giveUp
+                    case r of
+                        Right bs | B.length bs == n || not gaveUp -> return bs
+                        _ -> do
+                            let e = PostHandshake $ Error_Misc "gave up inside a record"
+                            setRxBroken ctx $ E.toException e
+                            E.throwIO e
+            if inRecord
+                then inside sz
+                else do
+                    r <- recvWith sz $ giveUpBetween giveUp
+                    case r of
+                        Left () -> E.throwIO GaveUp
+                        Right bs
+                            | B.length bs == sz || B.null bs -> return bs
+                            | otherwise -> do
+                                -- Begun: the rest is given up on only inside.
+                                gaveUp <- fired $ giveUpBetween giveUp
+                                if gaveUp
+                                    then (bs <>) <$> inside (sz - B.length bs)
+                                    else return bs
+        _ -> contextRecv ctx sz
+    fired stm = atomically $ (True <$ stm) `orElse` return False
     -- A broken transport ends the connection.  Another exception inside a
     -- record leaves the stream there, so later receives fail at once.
     -- Both wake up those waiting for a post-handshake authentication.
     broken :: E.SomeException -> IO a
     broken e
         | isJust (E.fromException @E.IOException e) = setEOF ctx >> E.throwIO e
+        | isJust (E.fromException @GaveUp e) = E.throwIO e
         | inRecord = setRxBroken ctx e >> E.throwIO e
         | otherwise = E.throwIO e

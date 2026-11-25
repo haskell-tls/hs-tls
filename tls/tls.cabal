@@ -213,6 +213,7 @@ test-suite spec
         ChannelBindingSpec
         CiphersSpec
         ECHSpec
+        GiveUpSpec
         EncodeSpec
         HandshakeSpec
         PipeChan
