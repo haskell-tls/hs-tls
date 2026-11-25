@@ -4,6 +4,8 @@
 
 * An interrupted receive breaks the receive side and wakes PHA waiters.
   [#668](https://github.com/haskell-tls/hs-tls/pull/668)
+* bye gives up on close_notify with the backend's SendWith.
+  [#670](https://github.com/haskell-tls/hs-tls/pull/670)
 
 ## Version 2.6.3
 
