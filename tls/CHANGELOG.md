@@ -6,6 +6,8 @@
   [#668](https://github.com/haskell-tls/hs-tls/pull/668)
 * bye gives up on close_notify with the backend's SendWith.
   [#670](https://github.com/haskell-tls/hs-tls/pull/670)
+* handshakeWith, recvDataWith, sendDataWith and byeWith give up on an STM action.
+  [#672](https://github.com/haskell-tls/hs-tls/pull/672)
 
 ## Version 2.6.3
 
