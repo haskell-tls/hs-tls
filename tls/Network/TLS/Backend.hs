@@ -15,6 +15,7 @@ module Network.TLS.Backend (
     HasBackend (..),
     Backend (..),
     RecvWith (..),
+    SendWith (..),
 ) where
 
 import Control.Concurrent.STM (STM)
@@ -61,12 +62,26 @@ class HasBackend a where
     getBackendRecvWith :: a -> Maybe RecvWith
     getBackendRecvWith _ = Nothing
 
+    -- | A send which can give up.  With it, 'Network.TLS.bye' gives up on
+    --   close_notify when the peer does not read.
+    --
+    -- @since 2.6.4
+    getBackendSendWith :: a -> Maybe SendWith
+    getBackendSendWith _ = Nothing
+
 -- | A receive of the specified number of bytes which gives up once the
 --   'STM' action succeeds, answering what it gave as 'Left'.  Bytes
 --   already received by then are answered instead.
 --
 -- @since 2.6.0
 newtype RecvWith = RecvWith (forall g. Int -> STM g -> IO (Either g ByteString))
+
+-- | A send of all the bytes which gives up once the 'STM' action
+--   succeeds, answering what it gave as 'Left'.  Part of the bytes may
+--   have been sent by then.
+--
+-- @since 2.6.4
+newtype SendWith = SendWith (forall g. ByteString -> STM g -> IO (Either g ()))
 
 instance HasBackend Backend where
     initializeBackend _ = return ()
@@ -110,6 +125,7 @@ instance HasBackend Network.Socket where
                     Right bs
                         | B.null bs -> done acc
                         | otherwise -> loop (left - B.length bs) (bs : acc)
+    getBackendSendWith sock = Just $ SendWith $ Network.sendAllWith sock
 #endif
 
 instance HasBackend Handle where

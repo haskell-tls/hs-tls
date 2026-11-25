@@ -79,6 +79,64 @@ spec = describe "bye" $ do
         pendingWith "needs network 3.2.12 or later"
 #endif
 
+    it "gives up on a send over a socket" $ do
+#if defined(mingw32_HOST_OS)
+        -- The send does not wait for a reader there.
+        pendingWith "Windows does not fill the send buffer"
+#elif MIN_VERSION_network(3,2,12)
+        (cs, ss) <- N.socketPair N.AF_UNIX N.Stream N.defaultProtocol
+        case getBackendSendWith cs of
+            Nothing -> expectationFailure "a socket should be able to give up"
+            Just (SendWith sendWith) -> do
+                -- Nobody reads, so the send buffer fills up.
+                late <- registerDelay 100000
+                sendWith (B.replicate 16000000 0) (readTVar late >>= check)
+                    `shouldReturn` Left ()
+        N.close cs
+        N.close ss
+#else
+        pendingWith "needs network 3.2.12 or later"
+#endif
+
+    it "gives up on close_notify when the peer does not read" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        stuck <- newIORef False
+        let noop = return ()
+            -- a peer which no longer reads
+            sendS bs = do
+                s <- readIORef stuck
+                if s then threadDelay maxBound else writePipeS pipe bs
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop sendS (readPipeS pipe)
+        cCtx <- contextNew cBackend cParams
+        sCtx <- contextNew (SendGivingUp sBackend $ sendWithVia stuck sendS) sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        writeIORef stuck True
+        timeout 5000000 (bye sCtx) `shouldReturn` Just ()
+        -- The record may be partly sent, so nothing more is.
+        r <- E.try @TLSException $ sendData sCtx "abc"
+        r `shouldSatisfy` isLeft
+
+    it "gives up on the answer to close_notify when the peer does not read" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        stuck <- newIORef False
+        let noop = return ()
+            sendS bs = do
+                s <- readIORef stuck
+                if s then threadDelay maxBound else writePipeS pipe bs
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop sendS (readPipeS pipe)
+        cCtx <- contextNew cBackend cParams
+        sCtx <- contextNew (SendGivingUp sBackend $ sendWithVia stuck sendS) sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        writeIORef stuck True
+        bye cCtx
+        timeout 5000000 (recvData sCtx) `shouldReturn` Just mempty
+
     it "does not wait with a backend which cannot give up" $ do
         (cParams, sParams) <- generate arbitraryPairParams13
         pipe <- newPipe
@@ -365,3 +423,17 @@ recvWithVia rd used = RecvWith $ \n giveUp -> do
     v <- newEmptyTMVarIO
     _ <- forkIO $ rd n >>= atomically . putTMVar v
     atomically $ (Right <$> takeTMVar v) `orElse` (Left <$> giveUp)
+
+-- | A backend which can give up on a send.
+data SendGivingUp = SendGivingUp Backend SendWith
+
+instance HasBackend SendGivingUp where
+    initializeBackend _ = return ()
+    getBackend (SendGivingUp b _) = b
+    getBackendSendWith (SendGivingUp _ f) = Just f
+
+-- | Sending with the given send unless stuck, when only the give-up ends it.
+sendWithVia :: IORef Bool -> (ByteString -> IO ()) -> SendWith
+sendWithVia stuck snd' = SendWith $ \bs giveUp -> do
+    s <- readIORef stuck
+    if s then Left <$> atomically giveUp else Right <$> snd' bs

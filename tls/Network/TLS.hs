@@ -35,6 +35,7 @@ module Network.TLS (
     -- * Backend abstraction
     HasBackend (..),
     RecvWith (..),
+    SendWith (..),
     Backend (..),
 
     -- * Parameters
@@ -333,7 +334,12 @@ module Network.TLS (
 import Data.X509 (ExtKeyUsagePurpose (..), PrivKey (..), PubKey (..))
 import Data.X509.Validation hiding (HostName, defaultHooks)
 
-import Network.TLS.Backend (Backend (..), HasBackend (..), RecvWith (..))
+import Network.TLS.Backend (
+    Backend (..),
+    HasBackend (..),
+    RecvWith (..),
+    SendWith (..),
+ )
 import Network.TLS.Cipher
 import Network.TLS.Compression (
     Compression (..),

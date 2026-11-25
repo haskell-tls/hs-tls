@@ -41,7 +41,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import GHC.IO.Exception (IOErrorType (..), IOException (..))
 
-import Network.TLS.Backend (Backend (..), RecvWith (..))
+import Network.TLS.Backend (Backend (..), RecvWith (..), SendWith (..))
 import Network.TLS.Context
 import Network.TLS.Context.Internal (
     PHAResult (..),
@@ -144,7 +144,8 @@ getRTT ctx = do
 -- sending close_notify.  It should be called before closing the backend.
 -- This doesn't actually close the backend.  Nothing is sent after a failed
 -- handshake or a received alert, and a peer which has gone already is not
--- an error.
+-- an error.  With 'getBackendSendWith', close_notify is given up on when
+-- the peer does not read it for a second or so.
 --
 -- Proper usage is as follows:
 --
@@ -238,17 +239,33 @@ bye_ ctx = liftIO $ do
     -- No response to a post-handshake authentication is waited for.
     (`E.finally` wakePHA ctx) $
         unless (eof || broken) $
-            E.handleJust vanished return $
-                withWriteLock ctx $
+            E.handleJust ignorable return $
+                withWriteLock ctx $ do
+                    ctx' <- givingUpSend
                     if tls13
-                        then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
-                        else sendPacket12 ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
+                        then sendPacket13 ctx' $ Alert13 [(AlertLevel_Warning, CloseNotify)]
+                        else sendPacket12 ctx' $ Alert [(AlertLevel_Warning, CloseNotify)]
   where
     -- The peer may have closed the connection without close_notify:
-    -- EPIPE or ECONNRESET is then just the end of it.
-    vanished e
-        | ioe_type e == ResourceVanished = Just ()
+    -- EPIPE or ECONNRESET is then just the end of it.  A peer which does
+    -- not read is given up on.
+    ignorable :: E.SomeException -> Maybe ()
+    ignorable e
+        | Just ioe <- E.fromException e, ioe_type ioe == ResourceVanished = Just ()
+        | Just (PostHandshake err) <- E.fromException e, err == gaveUpSending = Just ()
         | otherwise = Nothing
+    gaveUpSending = Error_Misc "bye gave up sending"
+    -- A backend which can give up on a send does so after a second, or
+    -- after 'rtt' if longer; with one which cannot, the send may block.
+    givingUpSend = case ctxBackendSendWith ctx of
+        Nothing -> return ctx
+        Just (SendWith sendWith) -> do
+            rtt <- getRTT ctx
+            late <- registerDelay $ max 1000000 rtt
+            let send bs =
+                    sendWith bs (readTVar late >>= check)
+                        >>= either (\_ -> E.throwIO $ PostHandshake gaveUpSending) return
+            return ctx{ctxBackend = (ctxBackend ctx){backendSend = send}}
 
 -- | If the ALPN extension has been used, this will
 -- return the protocol agreed upon.
