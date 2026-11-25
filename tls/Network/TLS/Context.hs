@@ -74,6 +74,7 @@ module Network.TLS.Context (
 ) where
 
 import Control.Concurrent.MVar
+import Control.Concurrent.STM
 import Control.Monad.State.Strict
 import Data.IORef
 import qualified Data.X509 as X509
@@ -176,6 +177,8 @@ contextNew backend params = liftIO $ do
     closeNotify <- newIORef False
     txBroken <- newIORef Nothing
     rxBroken <- newIORef Nothing
+    rxGiveUp <- newIORef Nothing
+    txGiveUp <- newIORef Nothing
     established <- newIORef NotEstablished
     stats <- newIORef newMeasurement
     needEmptyPacket <- newIORef False
@@ -186,7 +189,7 @@ contextNew backend params = liftIO $ do
     recvActionsRef <- newIORef []
     appDataRef <- newIORef []
     sendActionRef <- newIORef Nothing
-    locks <- Locks <$> newMVar () <*> newMVar () <*> newMVar ()
+    locks <- Locks <$> newTMVarIO () <*> newTMVarIO () <*> newTMVarIO ()
     st13ref <- newIORef defaultTLS13State
     mylimref <- newRecordLimitRef $ Just defaultRecordSizeLimit
     peerlimref <- newRecordLimitRef $ Just defaultRecordSizeLimit
@@ -205,6 +208,8 @@ contextNew backend params = liftIO $ do
                 { ctxBackend = getBackend backend
                 , ctxBackendRecvWith = getBackendRecvWith backend
                 , ctxBackendSendWith = getBackendSendWith backend
+                , ctxRxGiveUp = rxGiveUp
+                , ctxTxGiveUp = txGiveUp
                 , ctxShared = shared
                 , ctxSupported = supported
                 , ctxDebug = debug

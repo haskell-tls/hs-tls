@@ -29,6 +29,12 @@ module Network.TLS (
     closeNotifyReceived,
     bye,
 
+    -- * Giving up on an event
+    handshakeWith,
+    sendDataWith,
+    recvDataWith,
+    byeWith,
+
     -- * Exceptions
     -- $exceptions
 

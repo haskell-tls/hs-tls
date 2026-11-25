@@ -21,6 +21,11 @@ module Network.TLS.Context.Internal (
     PendingRecvAction (..),
     RecordLayer (..),
     Locks (..),
+    GiveUp (..),
+    GaveUp (..),
+    gaveUpSending,
+    withRxGiveUp,
+    withTxGiveUp,
     RoleParams (..),
     ctxEOF,
     ctxCloseNotify,
@@ -47,10 +52,13 @@ module Network.TLS.Context.Internal (
     updateMeasure,
     withMeasure,
     withReadLock,
+    withReadLockGivingUp,
     tryWithReadLock,
     withWriteLock,
+    withWriteLockGivingUp,
     withStateLock,
     withRWLock,
+    withRWLockGivingUp,
 
     -- * information
     Information (..),
@@ -101,6 +109,7 @@ module Network.TLS.Context.Internal (
 ) where
 
 import Control.Concurrent.MVar
+import Control.Concurrent.STM
 import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import Data.ByteArray (convert)
@@ -139,6 +148,12 @@ data Context
     -- ^ 'getBackendRecvWith' of the backend
     , ctxBackendSendWith :: Maybe SendWith
     -- ^ 'getBackendSendWith' of the backend
+    , ctxRxGiveUp :: IORef (Maybe GiveUp)
+    -- ^ what a receive through 'ctxBackendRecvWith' gives up on, set
+    -- with the read lock taken
+    , ctxTxGiveUp :: IORef (Maybe (STM ()))
+    -- ^ what a send through 'ctxBackendSendWith' gives up on, set with
+    -- the write lock taken
     , ctxSupported :: Supported
     , ctxShared :: Shared
     , ctxDebug :: DebugParams
@@ -203,12 +218,46 @@ data RoleParams = RoleParams
     , doPostHandshakeAuthWith_ :: Context -> Handshake13R -> IO ()
     }
 
+-- | What a receive gives up on: before the first byte of a record, and
+-- inside a record, which leaves the stream there.
+data GiveUp = GiveUp
+    { giveUpBetween :: STM ()
+    , giveUpInside :: STM ()
+    }
+
+-- | Thrown by a receive which has given up before the first byte of a
+-- record, and caught by the caller which set 'ctxRxGiveUp'.
+data GaveUp = GaveUp deriving (Show)
+
+instance E.Exception GaveUp
+
+-- | Thrown by a send which has given up, which may have sent part of a
+-- record.
+gaveUpSending :: TLSException
+gaveUpSending = PostHandshake $ Error_Misc "gave up sending"
+
+-- | Running with a give-up for the receives; the read lock is taken.
+withRxGiveUp :: Context -> GiveUp -> IO a -> IO a
+withRxGiveUp ctx = withGiveUpIn (ctxRxGiveUp ctx)
+
+-- | Running with a give-up for the sends; the write lock is taken.
+withTxGiveUp :: Context -> STM () -> IO a -> IO a
+withTxGiveUp ctx = withGiveUpIn (ctxTxGiveUp ctx)
+
+withGiveUpIn :: IORef (Maybe b) -> b -> IO a -> IO a
+withGiveUpIn ref g f =
+    E.bracket
+        (atomicModifyIORef' ref (\old -> (Just g, old)))
+        (writeIORef ref)
+        (const f)
+
+-- | 'TMVar's, so that a wait for them can be given up on.
 data Locks = Locks
-    { lockWrite :: MVar ()
+    { lockWrite :: TMVar ()
     -- ^ lock to use for writing data (including updating the state)
-    , lockRead :: MVar ()
+    , lockRead :: TMVar ()
     -- ^ lock to use for reading data (including updating the state)
-    , lockState :: MVar ()
+    , lockState :: TMVar ()
     -- ^ lock used during read/write when receiving and sending packet.
     -- it is usually nested in a write or read lock.
     }
@@ -429,8 +478,13 @@ contextGetInformation ctx = do
         _ -> return Nothing
 
 contextSend :: Context -> ByteString -> IO ()
-contextSend c b =
-    updateMeasure c (addBytesSent $ B.length b) >> (backendSend $ ctxBackend c) b
+contextSend c b = do
+    updateMeasure c (addBytesSent $ B.length b)
+    mgiveUp <- readIORef $ ctxTxGiveUp c
+    case (mgiveUp, ctxBackendSendWith c) of
+        (Just giveUp, Just (SendWith sendWith)) ->
+            sendWith b giveUp >>= either (\_ -> E.throwIO gaveUpSending) return
+        _ -> backendSend (ctxBackend c) b
 
 contextRecv :: Context -> Int -> IO ByteString
 contextRecv c sz = updateMeasure c (addBytesReceived sz) >> (backendRecv $ ctxBackend c) sz
@@ -594,8 +648,22 @@ runRxRecordState ctx f = do
 getStateRNG :: Context -> Int -> IO ByteString
 getStateRNG ctx n = usingState_ ctx $ genRandom n
 
+withLock :: TMVar () -> IO a -> IO a
+withLock lock = E.bracket_ (atomically $ takeTMVar lock) (atomically $ putTMVar lock ())
+
+-- | Taking the lock unless the 'STM' action succeeds first.
+withLockGivingUp :: TMVar () -> STM g -> IO a -> IO (Either g a)
+withLockGivingUp lock giveUp f = E.mask $ \restore -> do
+    r <- atomically $ (Right <$> takeTMVar lock) `orElse` (Left <$> giveUp)
+    case r of
+        Left g -> return $ Left g
+        Right () -> (Right <$> restore f) `E.finally` atomically (putTMVar lock ())
+
 withReadLock :: Context -> IO a -> IO a
-withReadLock ctx f = withMVar (lockRead $ ctxLocks ctx) (const f)
+withReadLock ctx = withLock (lockRead $ ctxLocks ctx)
+
+withReadLockGivingUp :: Context -> STM g -> IO a -> IO (Either g a)
+withReadLockGivingUp ctx = withLockGivingUp (lockRead $ ctxLocks ctx)
 
 -- | Like 'withReadLock', but returns 'Nothing' immediately instead of waiting
 -- when another thread already holds the read lock.
@@ -609,22 +677,23 @@ withReadLock ctx f = withMVar (lockRead $ ctxLocks ctx) (const f)
 -- is better than waiting for the current reader, which may hold the lock for
 -- arbitrarily long.  'bye' is the only such caller; see the note there.
 tryWithReadLock :: Context -> IO a -> IO (Maybe a)
-tryWithReadLock ctx f = E.bracket acquire release $ \mlock -> case mlock of
-    Nothing -> return Nothing
-    Just _ -> Just <$> f
-  where
-    lock = lockRead $ ctxLocks ctx
-    acquire = tryTakeMVar lock
-    release = mapM_ (putMVar lock)
+tryWithReadLock ctx f = either (const Nothing) Just <$> withReadLockGivingUp ctx (return ()) f
 
 withWriteLock :: Context -> IO a -> IO a
-withWriteLock ctx f = withMVar (lockWrite $ ctxLocks ctx) (const f)
+withWriteLock ctx = withLock (lockWrite $ ctxLocks ctx)
+
+withWriteLockGivingUp :: Context -> STM g -> IO a -> IO (Either g a)
+withWriteLockGivingUp ctx = withLockGivingUp (lockWrite $ ctxLocks ctx)
 
 withRWLock :: Context -> IO a -> IO a
 withRWLock ctx f = withReadLock ctx $ withWriteLock ctx f
 
+withRWLockGivingUp :: Context -> STM g -> IO a -> IO (Either g a)
+withRWLockGivingUp ctx giveUp f =
+    join <$> withReadLockGivingUp ctx giveUp (withWriteLockGivingUp ctx giveUp f)
+
 withStateLock :: Context -> IO a -> IO a
-withStateLock ctx f = withMVar (lockState $ ctxLocks ctx) (const f)
+withStateLock ctx = withLock (lockState $ ctxLocks ctx)
 
 tls13orLater :: MonadIO m => Context -> m Bool
 tls13orLater ctx = do
