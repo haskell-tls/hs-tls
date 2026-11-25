@@ -137,6 +137,8 @@ data Context
     -- ^ return the backend object associated with this context
     , ctxBackendRecvWith :: Maybe RecvWith
     -- ^ 'getBackendRecvWith' of the backend
+    , ctxBackendSendWith :: Maybe SendWith
+    -- ^ 'getBackendSendWith' of the backend
     , ctxSupported :: Supported
     , ctxShared :: Shared
     , ctxDebug :: DebugParams

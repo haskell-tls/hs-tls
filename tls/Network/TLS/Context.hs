@@ -204,6 +204,7 @@ contextNew backend params = liftIO $ do
             Context
                 { ctxBackend = getBackend backend
                 , ctxBackendRecvWith = getBackendRecvWith backend
+                , ctxBackendSendWith = getBackendSendWith backend
                 , ctxShared = shared
                 , ctxSupported = supported
                 , ctxDebug = debug
