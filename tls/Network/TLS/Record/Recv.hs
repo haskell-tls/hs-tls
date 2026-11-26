@@ -139,7 +139,7 @@ checkType header@(Header ty _ _)
 readExactBytes :: Context -> Bool -> Int -> IO (Either TLSError ByteString)
 readExactBytes ctx inRecord sz = do
     ctxRxBrokenBy ctx >>= mapM_ (throwBroken "a previous receive failed")
-    mgiveUp <- readIORef $ ctxRxGiveUp ctx
+    mgiveUp <- fmap snd <$> readIORef (ctxRxGiveUp ctx)
     hdrbs <- recv mgiveUp `E.catch` broken
     if B.length hdrbs == sz
         then return $ Right hdrbs
