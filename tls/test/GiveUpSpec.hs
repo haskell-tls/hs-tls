@@ -41,12 +41,12 @@ spec = describe "giving up" $ do
             sendData cCtx "abc"
             timeout 5000000 (recvData sCtx) `shouldReturn` Just "abc"
 
-    it "recvDataWith throws when giving up inside a record" $
+    it "recvDataWith gives up inside a record, breaking the context" $
         withPair $ \(_, cs) (sCtx, _) -> do
             -- the first byte of a record, and no more
             NB.sendAll cs "\x17"
             r <- timeout 5000000 $ E.try @TLSException (recvDataWith sCtx =<< lateBy 50000)
-            fmap isLeft r `shouldBe` Just True
+            r `shouldBe` Just (Right (Left ()))
             r' <- timeout 5000000 $ E.try @TLSException (recvData sCtx)
             fmap isLeft r' `shouldBe` Just True
 
@@ -85,7 +85,7 @@ spec = describe "giving up" $ do
                 waitReading
                 _ <- updateKey cCtx TwoWay
                 r <- timeout 5000000 $ E.try @TLSException (recvDataWith sCtx =<< lateBy 100000)
-                fmap isLeft r `shouldBe` Just True
+                r `shouldBe` Just (Right (Left ()))
                 -- the KeyUpdate is not answered, so the context is broken
                 r' <- timeout 5000000 $ E.try @TLSException $ recvData sCtx
                 fmap isLeft r' `shouldBe` Just True

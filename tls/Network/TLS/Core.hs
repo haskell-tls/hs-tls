@@ -112,7 +112,7 @@ handshakeWith ctx giveUp = liftIO $ do
                     withRxGiveUp ctx (GiveUp giveUp' giveUp') $
                         handshakeLocked ctx
     case r of
-        Left e -> given >>= maybe (E.throwIO (e :: E.SomeException)) (return . Left)
+        Left e -> failedAfter given e
         Right (Left a) -> return $ Left a
         Right (Right ()) -> do
             expected <- authFailureExpected ctx
@@ -127,6 +127,13 @@ recording :: STM a -> IO (STM (), IO (Maybe a))
 recording giveUp = do
     var <- newTVarIO Nothing
     return (giveUp >>= writeTVar var . Just, readTVarIO var)
+
+-- | A synchronous failure after the 'STM' action has given up is 'Left';
+-- any other failure is thrown again.
+failedAfter :: IO (Maybe a) -> E.SomeException -> IO (Either a b)
+failedAfter given e
+    | isJust (E.fromException @E.SomeAsyncException e) = E.throwIO e
+    | otherwise = given >>= maybe (E.throwIO e) (return . Left)
 
 authFailureExpected :: Context -> IO Bool
 authFailureExpected ctx = do
@@ -196,7 +203,7 @@ waitAuthFailureGivingUp ctx giveUp given = do
             return $ Right ()
         Right (Left e)
             | isJust (E.fromException @GaveUp e) -> return $ Right ()
-            | otherwise -> given >>= maybe (E.throwIO e) (return . Left)
+            | otherwise -> failedAfter given e
 
 rttFactor :: Int
 rttFactor = 3
@@ -466,26 +473,26 @@ recvData ctx = liftIO $ do
         if tls13 then recvData13 ctx else recvData12 ctx
 
 -- | 'recvData' which gives up once the 'STM' action succeeds, also while
--- waiting for the read lock.  It gives up only between records, and the
--- context can still be used then.  A record which has begun is read to
--- its end unless the 'STM' action succeeds meanwhile: then it throws, and
--- so do later receives.  With a backend which cannot give up on a
--- receive, only the wait for the lock is given up on.
+-- waiting for the read lock, with 'Left'.  Given up on between records,
+-- the context can still be used.  A record which has begun is read to its
+-- end unless the 'STM' action succeeds meanwhile: after that 'Left', the
+-- context cannot be used, and later receives throw.  With a backend which
+-- cannot give up on a receive, only the wait for the lock is given up on.
 --
 -- A send which the receive makes, such as a response to KeyUpdate or an
--- alert, gives up too, also while waiting for the write lock.  It then
--- throws, and the context can only be closed.
+-- alert, gives up too, also while waiting for the write lock, and the
+-- context cannot be used after that 'Left' either.
 --
 -- @since 2.6.4
 recvDataWith :: MonadIO m => Context -> STM a -> m (Either a ByteString)
 recvDataWith ctx giveUp = liftIO $ do
     tls13 <- tls13orLater ctx
     (giveUp', given) <- recording giveUp
-    fmap join $ withReadLockGivingUp ctx giveUp $ do
+    r <- E.try $ withReadLockGivingUp ctx giveUp $ do
         checkValid ctx
         withRxGiveUp ctx (GiveUp giveUp' giveUp') $
-            (Right <$> if tls13 then recvData13 ctx else recvData12 ctx)
-                `E.catch` \GaveUp -> given >>= maybe (E.throwIO GaveUp) (return . Left)
+            if tls13 then recvData13 ctx else recvData12 ctx
+    either (failedAfter given) return r
 
 recvData12 :: Context -> IO ByteString
 recvData12 ctx = do
