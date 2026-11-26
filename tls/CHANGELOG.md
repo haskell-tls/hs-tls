@@ -6,6 +6,8 @@
   [#673](https://github.com/haskell-tls/hs-tls/pull/673)
 * Give up on the sends a receive makes within recvDataWith.
   [#675](https://github.com/haskell-tls/hs-tls/pull/675)
+* recvDataWith answers Left for a failure after its give-up fired.
+  [#676](https://github.com/haskell-tls/hs-tls/pull/676)
 
 ## Version 2.6.4
 
