@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 -- |
@@ -36,9 +35,8 @@ module Network.TLS.Crypto.Types (
 ) where
 
 import Data.Word
-import GHC.Generics
 
-newtype Group = Group Word16 deriving (Eq, Generic)
+newtype Group = Group Word16 deriving (Eq)
 
 {- FOURMOLU_DISABLE -}
 pattern P256      :: Group

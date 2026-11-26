@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Network.TLS.Types.Cipher where
@@ -6,7 +5,6 @@ module Network.TLS.Types.Cipher where
 import Crypto.Cipher.Types (AuthTag)
 import Data.ByteArray (ScrubbedBytes)
 import Data.IORef
-import GHC.Generics
 import System.IO.Unsafe (unsafePerformIO)
 import Text.Printf
 
@@ -30,7 +28,7 @@ type AddDat = ByteString
 type CipherID = Word16
 
 newtype CipherId = CipherId {fromCipherId :: Word16}
-    deriving (Eq, Ord, Enum, Num, Integral, Real, Read, Generic)
+    deriving (Eq, Ord, Enum, Num, Integral, Real, Read)
 
 instance Show CipherId where
     show (CipherId 0x00FF) = "TLS_EMPTY_RENEGOTIATION_INFO_SCSV"

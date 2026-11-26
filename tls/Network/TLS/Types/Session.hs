@@ -1,10 +1,8 @@
-{-# LANGUAGE DeriveGeneric #-}
 
 module Network.TLS.Types.Session where
 
 import Crypto.Debug (DebugShow (..))
 import qualified Data.ByteString as B
-import GHC.Generics
 import Network.Socket (HostName)
 
 import Network.TLS.Crypto (Group, Hash (..), hash)
@@ -38,8 +36,7 @@ data SessionData = SessionData
     , sessionCipher :: CipherID
     , sessionCompression :: CompressionID
     , sessionClientSNI :: Maybe HostName
-    , -- ScrubbedBytes is not an instance of Generic, sigh.
-      sessionSecret :: ByteString
+    , sessionSecret :: ByteString
     , sessionGroup :: Maybe Group
     , sessionTicketInfo :: Maybe TLS13TicketInfo
     , sessionALPN :: Maybe ByteString
@@ -56,7 +53,7 @@ data SessionData = SessionData
     -- @since 2.5.1
     }
     -- sessionFromTicket :: Bool
-    deriving (Eq, Generic)
+    deriving (Eq)
 
 -- | Everything but @sessionSecret@, which renders as @\<secret\>@: whoever
 -- has it can resume the session.  'Crypto.Debug.debugShow' renders it.
@@ -125,7 +122,7 @@ is0RTTPossible sd = sessionMaxEarlyDataSize sd > 0
 data SessionFlag
     = -- | Session created with Extended Main Secret
       SessionEMS
-    deriving (Show, Eq, Enum, Generic)
+    deriving (Show, Eq, Enum)
 
 type Second = Word32
 type Millisecond = Word64
@@ -136,5 +133,5 @@ data TLS13TicketInfo = TLS13TicketInfo
     , txrxTime :: Millisecond -- serverSendTime or clientReceiveTime
     , estimatedRTT :: Maybe Millisecond
     }
-    deriving (Show, Eq, Generic)
+    deriving (Show, Eq)
 

@@ -1,16 +1,14 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 module Network.TLS.Types.Version (
     Version (Version, SSL2, SSL3, TLS10, TLS11, TLS12, TLS13),
 ) where
 
-import GHC.Generics
 
 import Network.TLS.Imports
 
 -- | Versions known to TLS
-newtype Version = Version Word16 deriving (Eq, Ord, Generic)
+newtype Version = Version Word16 deriving (Eq, Ord)
 
 {- FOURMOLU_DISABLE -}
 pattern SSL2  :: Version
