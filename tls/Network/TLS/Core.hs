@@ -235,7 +235,9 @@ bye :: MonadIO m => Context -> m ()
 bye ctx = byeWith ctx (retry :: STM ())
 
 -- | 'bye' which also gives up once the 'STM' action succeeds, on the
--- peer's last handshake messages and on close_notify alike.
+-- peer's last handshake messages and on close_notify alike.  The 'STM'
+-- action only bounds the wait; its result is not used, and close_notify
+-- is best effort: a peer gone or a send given up on is not reported.
 --
 -- @since 2.6.4
 byeWith :: MonadIO m => Context -> STM a -> m ()
