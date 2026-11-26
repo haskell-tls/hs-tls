@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.7.0
+
+* Drop serialise: encode SessionData with tls's own format.
+  [#673](https://github.com/haskell-tls/hs-tls/pull/673)
+
 ## Version 2.6.4
 
 * An interrupted receive breaks the receive side and wakes PHA waiters.

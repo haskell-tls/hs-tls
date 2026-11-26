@@ -1,5 +1,10 @@
 # ChangeLog for tls-session-manager
 
+## 0.1.5
+
+* Drop serialise: encode SessionData with tls's own format.
+  [#673](https://github.com/haskell-tls/hs-tls/pull/673)
+
 ## 0.1.4
 
 * Never wrap around the RTT of a ticket, and cap it at 10 seconds.
