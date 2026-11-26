@@ -5,7 +5,6 @@ module Network.TLS.Types.Version (
     Version (Version, SSL2, SSL3, TLS10, TLS11, TLS12, TLS13),
 ) where
 
-import Codec.Serialise
 import GHC.Generics
 
 import Network.TLS.Imports
@@ -37,4 +36,3 @@ instance Show Version where
     show (Version x) = "Version " ++ show x
 {- FOURMOLU_ENABLE -}
 
-instance Serialise Version

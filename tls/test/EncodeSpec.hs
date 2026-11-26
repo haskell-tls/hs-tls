@@ -62,6 +62,22 @@ spec = do
         it "decodes one of each" $
             clientHelloAlert [0x1301] [0] `shouldBe` Nothing
 
+    describe "session data" $ do
+        prop "decodes what it encodes" $ \sd ->
+            decodeSessionData (encodeSessionData sd) `shouldBe` Just sd
+        it "keeps its format" $
+            encodeSessionData defaultSessionData{sessionSecret = B.singleton 0x73}
+                `shouldBe` B.pack [1, 3, 4, 0, 0, 0, 0, 0, 1, 0x73, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        prop "refuses a truncated or extended encoding" $ \sd -> do
+            let bs = encodeSessionData sd
+            forM_ [0 .. B.length bs - 1] $ \n ->
+                decodeSessionData (B.take n bs) `shouldBe` Nothing
+            decodeSessionData (B.snoc bs 0) `shouldBe` Nothing
+        prop "refuses another format" $ \sd ->
+            decodeSessionData (B.cons 2 $ B.drop 1 $ encodeSessionData sd)
+                `shouldBe` Nothing
+        prop "yields Nothing rather than throwing" $ \ws ->
+            void $ evaluate $ fmap encodeSessionData $ decodeSessionData $ B.pack ws
     describe "encoder/decoder" $ do
         prop "can encode/decode Header" $ \x -> do
             decodeHeader (encodeHeader x) `shouldBe` Right x

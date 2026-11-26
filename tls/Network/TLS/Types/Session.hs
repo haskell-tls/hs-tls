@@ -2,7 +2,6 @@
 
 module Network.TLS.Types.Session where
 
-import Codec.Serialise
 import Crypto.Debug (DebugShow (..))
 import qualified Data.ByteString as B
 import GHC.Generics
@@ -139,6 +138,3 @@ data TLS13TicketInfo = TLS13TicketInfo
     }
     deriving (Show, Eq, Generic)
 
-instance Serialise TLS13TicketInfo
-instance Serialise SessionFlag
-instance Serialise SessionData
