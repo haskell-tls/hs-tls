@@ -470,6 +470,10 @@ recvData ctx = liftIO $ do
 -- so do later receives.  With a backend which cannot give up on a
 -- receive, only the wait for the lock is given up on.
 --
+-- A send which the receive makes, such as a response to KeyUpdate or an
+-- alert, gives up too, also while waiting for the write lock.  It then
+-- throws, and the context can only be closed.
+--
 -- @since 2.6.4
 recvDataWith :: MonadIO m => Context -> STM a -> m (Either a ByteString)
 recvDataWith ctx giveUp = liftIO $ do

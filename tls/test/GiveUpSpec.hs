@@ -79,6 +79,17 @@ spec = describe "giving up" $ do
                 timeout 5000000 (sendDataWith sCtx "abc" =<< lateBy 50000)
                     `shouldReturn` Just (Left ())
 
+    it "recvDataWith gives up on the KeyUpdate it owes, waiting for another writer" $
+        withPair $ \(cCtx, _) (sCtx, _) ->
+            withAsync (sendData sCtx big) $ \_ -> do
+                waitReading
+                _ <- updateKey cCtx TwoWay
+                r <- timeout 5000000 $ E.try @TLSException (recvDataWith sCtx =<< lateBy 100000)
+                fmap isLeft r `shouldBe` Just True
+                -- the KeyUpdate is not answered, so the context is broken
+                r' <- timeout 5000000 $ E.try @TLSException $ recvData sCtx
+                fmap isLeft r' `shouldBe` Just True
+
     it "byeWith gives up sooner than bye" $
         withPair $ \_ (sCtx, _) ->
             withAsync (sendData sCtx big) $ \_ -> do

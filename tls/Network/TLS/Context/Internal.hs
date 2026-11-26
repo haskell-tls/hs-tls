@@ -108,6 +108,7 @@ module Network.TLS.Context.Internal (
     setTLS13HPKE,
 ) where
 
+import Control.Concurrent (ThreadId, myThreadId)
 import Control.Concurrent.MVar
 import Control.Concurrent.STM
 import qualified Control.Exception as E
@@ -148,9 +149,9 @@ data Context
     -- ^ 'getBackendRecvWith' of the backend
     , ctxBackendSendWith :: Maybe SendWith
     -- ^ 'getBackendSendWith' of the backend
-    , ctxRxGiveUp :: IORef (Maybe GiveUp)
+    , ctxRxGiveUp :: IORef (Maybe (ThreadId, GiveUp))
     -- ^ what a receive through 'ctxBackendRecvWith' gives up on, set
-    -- with the read lock taken
+    -- with the read lock taken, and the thread which set it
     , ctxTxGiveUp :: IORef (Maybe (STM ()))
     -- ^ what a send through 'ctxBackendSendWith' gives up on, set with
     -- the write lock taken
@@ -238,7 +239,9 @@ gaveUpSending = PostHandshake $ Error_Misc "gave up sending"
 
 -- | Running with a give-up for the receives; the read lock is taken.
 withRxGiveUp :: Context -> GiveUp -> IO a -> IO a
-withRxGiveUp ctx = withGiveUpIn (ctxRxGiveUp ctx)
+withRxGiveUp ctx g f = do
+    tid <- myThreadId
+    withGiveUpIn (ctxRxGiveUp ctx) (tid, g) f
 
 -- | Running with a give-up for the sends; the write lock is taken.
 withTxGiveUp :: Context -> STM () -> IO a -> IO a
@@ -679,8 +682,25 @@ withReadLockGivingUp ctx = withLockGivingUp (lockRead $ ctxLocks ctx)
 tryWithReadLock :: Context -> IO a -> IO (Maybe a)
 tryWithReadLock ctx f = either (const Nothing) Just <$> withReadLockGivingUp ctx (return ()) f
 
+-- | Within a receive which gives up ('withRxGiveUp'), a send the receive
+-- makes, such as a response to KeyUpdate or an alert, gives up with it,
+-- also while waiting for the lock.  Neither side can then be used.
 withWriteLock :: Context -> IO a -> IO a
-withWriteLock ctx = withLock (lockWrite $ ctxLocks ctx)
+withWriteLock ctx f = do
+    tid <- myThreadId
+    mgiveUp <- readIORef $ ctxRxGiveUp ctx
+    case mgiveUp of
+        Just (owner, GiveUp{giveUpInside = g})
+            | owner == tid ->
+                withWriteLockGivingUp ctx g (withTxGiveUp ctx g f)
+                    >>= either (\_ -> gaveUp) return
+        _ -> withLock (lockWrite $ ctxLocks ctx) f
+  where
+    gaveUp = do
+        let e = E.toException gaveUpSending
+        setTxBroken ctx e
+        setRxBroken ctx e
+        E.throwIO gaveUpSending
 
 withWriteLockGivingUp :: Context -> STM g -> IO a -> IO (Either g a)
 withWriteLockGivingUp ctx = withLockGivingUp (lockWrite $ ctxLocks ctx)
