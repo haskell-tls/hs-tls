@@ -4,6 +4,8 @@
 
 * Drop serialise: encode SessionData with tls's own format.
   [#673](https://github.com/haskell-tls/hs-tls/pull/673)
+* Give up on the sends a receive makes within recvDataWith.
+  [#675](https://github.com/haskell-tls/hs-tls/pull/675)
 
 ## Version 2.6.4
 
