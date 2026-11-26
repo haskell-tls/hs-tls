@@ -10,9 +10,7 @@ module Session (
     oneSessionTicket,
 ) where
 
-import Codec.Serialise
 import Control.Monad
-import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import Network.TLS
 import Network.TLS.Internal
@@ -81,12 +79,12 @@ oneSessionTicket =
     noSessionManager
         { sessionResume = resume
         , sessionResumeOnlyOnce = resume
-        , sessionEstablish = \_ dat -> return $ Just $ L.toStrict $ serialise dat
+        , sessionEstablish = \_ dat -> return $ Just $ encodeSessionData dat
         , sessionInvalidate = \_ -> return ()
         , sessionUseTicket = True
         }
 
 resume :: Ticket -> IO (Maybe SessionData)
 resume ticket
-    | isTicket ticket = return $ Just $ deserialise $ L.fromStrict ticket
+    | isTicket ticket = return $ decodeSessionData ticket
     | otherwise = return Nothing

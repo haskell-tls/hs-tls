@@ -28,8 +28,7 @@ library
         crypto-token >= 0.2.0 && < 0.3,
         psqueues >= 0.2 && < 0.3,
         ram,
-        serialise >= 0.2 && < 0.3,
-        tls >= 2.4.13 && < 2.7
+        tls >= 2.7 && < 2.8
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData

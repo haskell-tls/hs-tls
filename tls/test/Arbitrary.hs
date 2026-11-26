@@ -468,3 +468,41 @@ genByteString i = B.pack <$> vector i
 unsafeHead :: [a] -> a
 unsafeHead [] = error "unsafeHead"
 unsafeHead (x : _) = x
+
+instance Arbitrary SessionFlag where
+    arbitrary = elements [SessionEMS]
+
+instance Arbitrary TLS13TicketInfo where
+    arbitrary =
+        TLS13TicketInfo <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+
+instance Arbitrary SessionData where
+    arbitrary = do
+        ver <- arbitrary
+        cipher <- arbitrary
+        comp <- arbitrary
+        -- An SNI is octets, held as Char8.
+        sni <- liftArbitrary $ listOf $ elements ['\0' .. '\255']
+        secret <- B.pack <$> arbitrary
+        grp <- arbitrary
+        tinfo <- arbitrary
+        alpn <- liftArbitrary (B.pack <$> arbitrary)
+        maxEarly <- arbitrary
+        flags <- arbitrary
+        cert <- liftArbitrary (B.pack <$> arbitrary)
+        appData <- liftArbitrary (B.pack <$> arbitrary)
+        return
+            defaultSessionData
+                { sessionVersion = ver
+                , sessionCipher = cipher
+                , sessionCompression = comp
+                , sessionClientSNI = sni
+                , sessionSecret = secret
+                , sessionGroup = grp
+                , sessionTicketInfo = tinfo
+                , sessionALPN = alpn
+                , sessionMaxEarlyDataSize = maxEarly
+                , sessionFlags = flags
+                , sessionClientCertificate = cert
+                , sessionAppData = appData
+                }

@@ -16,9 +16,7 @@ module Network.TLS.SessionTicket (
     secretKeyInterval,
 ) where
 
-import Codec.Serialise
 import qualified Crypto.Token as CT
-import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import Data.Int (Int64)
 import qualified Data.OrdPSQ as Q
@@ -85,19 +83,13 @@ sessionTicketManager ctmgr used =
         }
 
 establish :: CT.TokenManager -> SessionID -> SessionData -> IO (Maybe Ticket)
-establish ctmgr _ sd = Just <$> CT.encryptToken ctmgr b
-  where
-    b = L.toStrict $ serialise sd
+establish ctmgr _ sd = Just <$> CT.encryptToken ctmgr (encodeSessionData sd)
 
 resume :: CT.TokenManager -> Ticket -> IO (Maybe SessionData)
 resume ctmgr ticket
     | isTicket ticket = do
         msdb <- CT.decryptToken ctmgr ticket
-        case msdb of
-            Nothing -> return Nothing
-            Just sdb -> case deserialiseOrFail $ L.fromStrict sdb of
-                Left _ -> return Nothing
-                Right sd -> return $ Just sd
+        return $ msdb >>= decodeSessionData
     | otherwise = return Nothing
 
 -- A replay has the same age, so the same expected arrival time E, which is

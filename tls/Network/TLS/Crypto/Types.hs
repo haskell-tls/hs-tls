@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 -- |
@@ -35,12 +34,9 @@ module Network.TLS.Crypto.Types (
     KeyExchangeSignatureAlg (..),
 ) where
 
-import Codec.Serialise
 import Data.Word
-import GHC.Generics
 
-newtype Group = Group Word16 deriving (Eq, Generic)
-instance Serialise Group
+newtype Group = Group Word16 deriving (Eq)
 
 {- FOURMOLU_DISABLE -}
 pattern P256      :: Group
