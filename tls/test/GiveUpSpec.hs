@@ -16,7 +16,7 @@ import qualified Network.Socket.ByteString as NB
 import Network.TLS
 import System.Timeout
 import Test.Hspec
-import Test.QuickCheck (generate)
+import Test.QuickCheck (generate, suchThat)
 
 import Arbitrary
 
@@ -98,6 +98,16 @@ spec = describe "giving up" $ do
                 timeout 5000000 (byeWith sCtx =<< lateBy 50000) `shouldReturn` Just ()
                 t1 <- getMonotonicTime
                 (t1 - t0) `shouldSatisfy` (< 0.5)
+
+    it "handshake reports a rejected client certificate, then works as usual" $ do
+        withClientAuth False $ \cCtx sCtx -> do
+            let try' = E.try @TLSException . handshake
+            r <- timeout 5000000 $ concurrently (try' cCtx) (try' sCtx)
+            fmap (\(c, s) -> (isLeft c, isLeft s)) r `shouldBe` Just (True, True)
+        withClientAuth True $ \cCtx sCtx -> do
+            timeout 5000000 (concurrently_ (handshake cCtx) (handshake sCtx)) `shouldReturn` Just ()
+            sendData cCtx "hello"
+            timeout 5000000 (recvData sCtx) `shouldReturn` Just "hello"
 #endif
 #else
     it "needs network 3.2.12 or later" $ pendingWith "network < 3.2.12"
@@ -118,6 +128,30 @@ withSockets =
     E.bracket
         (N.socketPair N.AF_UNIX N.Stream N.defaultProtocol)
         (\(cs, ss) -> N.close cs >> N.close ss)
+
+-- | TLS 1.3 over a socket pair, the client sending a certificate which the
+-- server accepts or rejects.
+withClientAuth :: Bool -> (Context -> Context -> IO a) -> IO a
+withClientAuth accept body = withSockets $ \(cs, ss) -> do
+    (cParams, sParams) <- generate arbitraryPairParams13
+    cred <- generate $ arbitraryClientCredential TLS13 `suchThat` (not . isCredentialDSA)
+    let cParams' =
+            cParams
+                { clientHooks =
+                    (clientHooks cParams){onCertificateRequest = \_ -> return $ Just cred}
+                }
+        sParams' =
+            sParams
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks sParams){onClientCertificate = \_ -> return usage}
+                }
+        usage
+            | accept = CertificateUsageAccept
+            | otherwise = CertificateUsageReject CertificateRejectUnknownCA
+    cCtx <- contextNew cs cParams'
+    sCtx <- contextNew ss sParams'
+    body cCtx sCtx
 
 -- | TLS 1.3 over a socket pair, the handshake done with 'handshakeWith'.
 withPair :: ((Context, N.Socket) -> (Context, N.Socket) -> IO a) -> IO a

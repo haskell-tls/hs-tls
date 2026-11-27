@@ -54,6 +54,7 @@ import Network.TLS.Context.Internal (
     gaveUpSending,
     incrementTLS13KeyUpdateCount,
     resetTLS13KeyUpdateCount,
+    throwBroken,
     wakePHA,
     withRWLockGivingUp,
     withReadLockGivingUp,
@@ -94,7 +95,12 @@ handshake :: MonadIO m => Context -> m ()
 handshake ctx = liftIO $ do
     handshake_ ctx
     -- Trying to receive an alert of client authentication failure
-    authFailureExpected ctx >>= \expected -> when expected $ waitAuthFailure ctx
+    authFailureExpected ctx >>= \expected -> when expected $
+        case ctxBackendRecvWith ctx of
+            Nothing -> waitAuthFailure ctx
+            Just _ -> void $ waitAuthFailureGivingUp ctx retry noneGiven
+  where
+    noneGiven = return (Nothing :: Maybe ())
 
 -- | 'handshake' which gives up once the 'STM' action succeeds, also while
 -- waiting for the locks or in a send.  After 'Left', the context cannot be
@@ -180,7 +186,7 @@ waitAuthFailure ctx = do
         case pending of
             PendingRecvError err -> do
                 modifyTLS13State ctx $ \st -> st{tls13stPendingRecv = NoPendingRecv}
-                E.throwIO err
+                throwPending err
             _ -> return ()
 
 -- | 'waitAuthFailure' with a backend which can give up: no thread, since
@@ -205,6 +211,11 @@ waitAuthFailureGivingUp ctx giveUp given = do
         Right (Left e)
             | isJust (E.fromException @GaveUp e) -> return $ Right ()
             | otherwise -> failedAfter given e
+
+-- | An error of the receive in the thread of 'waitAuthFailure', thrown in
+-- another thread: an asynchronous exception becomes a synchronous one.
+throwPending :: E.SomeException -> IO a
+throwPending = throwBroken "the receive waiting for an authentication failure failed"
 
 rttFactor :: Int
 rttFactor = 3
@@ -540,7 +551,7 @@ recvData13 ctx = do
             return dat
         PendingRecvError err -> do
             clearPending
-            E.throwIO err
+            throwPending err
   where
     clearPending = modifyTLS13State ctx $ \st -> st{tls13stPendingRecv = NoPendingRecv}
 
