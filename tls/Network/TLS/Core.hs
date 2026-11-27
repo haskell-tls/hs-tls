@@ -192,7 +192,8 @@ waitAuthFailureGivingUp ctx giveUp given = do
     late <- registerDelay rtt
     let between = (readTVar late >>= check) `orElse` giveUp
     r <-
-        withReadLockGivingUp ctx giveUp $
+        -- A reader holding the lock is not waited for beyond 'rtt'.
+        withReadLockGivingUp ctx between $
             withRxGiveUp ctx (GiveUp between giveUp) $
                 E.try $
                     recvData13 ctx

@@ -320,7 +320,8 @@ requestCertificateAsyncServer sparams ctx = withWriteLock ctx $ do
         forM_ mcerts $ usingState_ ctx . setClientCertificateChain
         modifyTLS13State ctx $ \st ->
             st{tls13stPHA = Nothing, tls13stPHAResponding = False}
-        putMVar mv $ maybe PHADeclined PHAAccepted mcerts
+        -- 'bye' may have woken the waiters already.
+        void $ tryPutMVar mv $ maybe PHADeclined PHAAccepted mcerts
     -- The waiters get the error when 'recvData' has sent the alert and
     -- closed the connection, so that they do not send close_notify.
     reportTo mv f =

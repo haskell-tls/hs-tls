@@ -314,6 +314,8 @@ spec = do
             post_handshake_auth_async_interrupted
         it "fails the waiter when the server says bye" $
             post_handshake_auth_async_bye
+        it "keeps reading after bye when the response arrives" $
+            post_handshake_auth_async_bye_read
         it "closes the connection when a synchronous post-handshake auth fails" $
             post_handshake_auth_sync_fail
         it "commits the client certificate of a post-handshake auth at Finished" $
@@ -3613,6 +3615,24 @@ post_handshake_auth_async_bye = do
         check <- requestCertificateAsync sCtx
         bye sCtx
         timeout 1000000 (check True) >>= (`shouldSatisfy` isFailed)
+  where
+    isFailed (Just (PHAFailed _)) = True
+    isFailed _ = False
+
+-- | The server says bye while a response is pending and keeps reading: the
+-- response, arriving after the waiter has failed, does not block the reader.
+post_handshake_auth_async_bye_read :: IO ()
+post_handshake_auth_async_bye_read = do
+    params <- generate arbitraryPairParams13
+    cred <- generate arbitraryPHACredential
+    withPairContext (phaParams True cred params) $ \(cCtx, sCtx) -> do
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        check <- requestCertificateAsync sCtx
+        bye sCtx
+        timeout 1000000 (check True) >>= (`shouldSatisfy` isFailed)
+        -- The client answers the request, then sees close_notify.
+        timeout 2000000 (recvData cCtx) `shouldReturn` Just ""
+        timeout 2000000 (recvData sCtx) `shouldReturn` Just ""
   where
     isFailed (Just (PHAFailed _)) = True
     isFailed _ = False
