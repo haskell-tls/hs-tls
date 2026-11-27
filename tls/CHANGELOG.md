@@ -8,8 +8,10 @@
   [#675](https://github.com/haskell-tls/hs-tls/pull/675)
 * recvDataWith answers Left for a failure after its give-up fired.
   [#676](https://github.com/haskell-tls/hs-tls/pull/676)
-* Fix a PHA response after bye and an unbounded lock wait in handshakeWith
+* Fix a PHA response after bye and an unbounded lock wait in handshakeWith.
   [#677](https://github.com/haskell-tls/hs-tls/pull/677)
+* handshake waits for an auth failure without a thread when it can give up.
+  [#678](https://github.com/haskell-tls/hs-tls/pull/678)
 
 ## Version 2.6.4
 
