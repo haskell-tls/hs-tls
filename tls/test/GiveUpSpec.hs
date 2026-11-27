@@ -4,6 +4,7 @@
 
 module GiveUpSpec where
 
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import qualified Control.Exception as E
@@ -49,6 +50,22 @@ spec = describe "giving up" $ do
             r `shouldBe` Just (Right (Left ()))
             r' <- timeout 5000000 $ E.try @TLSException (recvData sCtx)
             fmap isLeft r' `shouldBe` Just True
+
+#if !defined(mingw32_HOST_OS)
+    -- On Windows, 'timeout' does not interrupt a receive on a socket.
+    it "recvDataWith gives up inside a record with a give-up which fires once" $
+        withPair $ \(_, cs) (sCtx, _) -> do
+            let drain = timeout 200000 (NB.recv cs 4096) >>= mapM_ (const drain)
+            drain -- the session tickets
+            -- a header of 100 bytes, and 10 of them
+            NB.sendAll cs $ "\x17\x03\x03\x00\x64" <> B.replicate 10 0
+            var <- newEmptyTMVarIO
+            withAsync (threadDelay 50000 >> atomically (putTMVar var ())) $ \_ -> do
+                r <- timeout 5000000 $ E.try @TLSException (recvDataWith sCtx (takeTMVar var))
+                r `shouldBe` Just (Right (Left ()))
+            -- not taken as a short record, which is answered with an alert
+            timeout 200000 (NB.recv cs 100) `shouldReturn` Nothing
+#endif
 
     it "recvDataWith gives up waiting for another reader" $
         withPair $ \(cCtx, _) (sCtx, _) ->
