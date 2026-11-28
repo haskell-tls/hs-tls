@@ -16,6 +16,8 @@
   [#680](https://github.com/haskell-tls/hs-tls/pull/680)
 * Add updateKeyWith.
   [#681](https://github.com/haskell-tls/hs-tls/pull/681)
+* Add requestCertificateAsyncWith.
+  [#682](https://github.com/haskell-tls/hs-tls/pull/682)
 
 ## Version 2.6.4
 
