@@ -55,6 +55,7 @@ module Network.TLS.Context.Internal (
     withReadLockGivingUp,
     tryWithReadLock,
     withWriteLock,
+    myRxGiveUp,
     withWriteLockGivingUp,
     withStateLock,
     withRWLock,
@@ -701,6 +702,15 @@ withWriteLock ctx f = do
         setTxBroken ctx e
         setRxBroken ctx e
         E.throwIO gaveUpSending
+
+-- | The give-up of the receive which this thread is in, if any.
+myRxGiveUp :: Context -> IO (STM ())
+myRxGiveUp ctx = do
+    tid <- myThreadId
+    mgiveUp <- readIORef $ ctxRxGiveUp ctx
+    return $ case mgiveUp of
+        Just (owner, GiveUp{giveUpInside = g}) | owner == tid -> g
+        _ -> retry
 
 withWriteLockGivingUp :: Context -> STM g -> IO a -> IO (Either g a)
 withWriteLockGivingUp ctx = withLockGivingUp (lockWrite $ ctxLocks ctx)

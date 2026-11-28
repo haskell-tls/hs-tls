@@ -53,6 +53,7 @@ import Network.TLS.Context.Internal (
     ctxTxBroken,
     gaveUpSending,
     incrementTLS13KeyUpdateCount,
+    myRxGiveUp,
     resetTLS13KeyUpdateCount,
     throwBroken,
     wakePHA,
@@ -97,7 +98,7 @@ handshake ctx = liftIO $ do
     -- Trying to receive an alert of client authentication failure
     authFailureExpected ctx >>= \expected -> when expected $
         case ctxBackendRecvWith ctx of
-            Nothing -> waitAuthFailure ctx
+            Nothing -> waitAuthFailure ctx retry
             Just _ -> void $ waitAuthFailureGivingUp ctx retry noneGiven
   where
     noneGiven = return (Nothing :: Maybe ())
@@ -125,14 +126,17 @@ handshakeWith ctx giveUp = liftIO $ do
             if not expected
                 then return $ Right ()
                 else case ctxBackendRecvWith ctx of
-                    Nothing -> Right <$> waitAuthFailure ctx
+                    Nothing -> Right <$> waitAuthFailure ctx giveUp'
                     Just _ -> waitAuthFailureGivingUp ctx giveUp' given
 
 -- | Recording what the 'STM' action gave, for one which has given up.
+-- Once it has, the recorded one succeeds without running it again: it
+-- may succeed only once, as 'takeTMVar' does.
 recording :: STM a -> IO (STM (), IO (Maybe a))
 recording giveUp = do
     var <- newTVarIO Nothing
-    return (giveUp >>= writeTVar var . Just, readTVarIO var)
+    let again = readTVar var >>= maybe retry (\_ -> return ())
+    return (again `orElse` (giveUp >>= writeTVar var . Just), readTVarIO var)
 
 -- | A synchronous failure after the 'STM' action has given up is 'Left';
 -- any other failure is thrown again.
@@ -148,9 +152,10 @@ authFailureExpected ctx = do
     sentClientCert <- tls13stSentClientCert <$> getTLS13State ctx
     return $ role == ClientRole && tls13 && sentClientCert
 
--- | Waiting 'rtt' for an alert of client authentication failure.
-waitAuthFailure :: Context -> IO ()
-waitAuthFailure ctx = do
+-- | Waiting 'rtt' for an alert of client authentication failure, or until
+-- the 'STM' action succeeds.
+waitAuthFailure :: Context -> STM () -> IO ()
+waitAuthFailure ctx giveUp = do
     rtt <- getRTT ctx
     -- We are only willing to wait 'rtt' for the alert, but a receive
     -- must not be abandoned once it has started.  Records are read
@@ -178,7 +183,8 @@ waitAuthFailure ctx = do
     late <- registerDelay rtt
     arrived <-
         atomically $
-            (Just <$> takeTMVar done) `orElse` (Nothing <$ (readTVar late >>= check))
+            (Just <$> takeTMVar done)
+                `orElse` (Nothing <$ ((readTVar late >>= check) `orElse` giveUp))
     -- Still report the authentication failure from 'handshake' itself
     -- whenever it did arrive in time.
     when (isJust arrived) $ do
@@ -389,9 +395,9 @@ sendData ctx dataToSend = liftIO $ do
     withWriteLock ctx $ sendDataLocked ctx tls13 dataToSend
 
 -- | 'sendData' which gives up once the 'STM' action succeeds, also while
--- waiting for the write lock.  Given up on before anything is sent, the
--- context can still be used.  Given up on after that, part of the data
--- may have been sent, and how much is not known, so later sends throw.
+-- waiting for the write lock.  Given up on before the send begins, the
+-- context can still be used.  Given up on after that, even with nothing
+-- sent, the record sequence has moved on, so later sends throw.
 -- With a backend which cannot give up on a send, only the wait for the
 -- lock is given up on.
 --
@@ -807,7 +813,10 @@ notAligned = "received message not aligned with record boundary"
 -- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions
 tryBye :: Context -> IO ()
-tryBye ctx = catchException (bye_ ctx retry) (\_ -> return ()) `E.finally` setEOF ctx
+tryBye ctx = do
+    -- Within 'recvDataWith', close_notify is also given up on with it.
+    giveUp <- myRxGiveUp ctx
+    catchException (bye_ ctx giveUp) (\_ -> return ()) `E.finally` setEOF ctx
 
 onError
     :: Monad m
