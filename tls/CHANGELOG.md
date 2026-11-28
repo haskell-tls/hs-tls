@@ -18,6 +18,8 @@
   [#681](https://github.com/haskell-tls/hs-tls/pull/681)
 * Add requestCertificateAsyncWith.
   [#682](https://github.com/haskell-tls/hs-tls/pull/682)
+* util: give up instead of killing or hanging.
+  [#683](https://github.com/haskell-tls/hs-tls/pull/683)
 
 ## Version 2.6.4
 
