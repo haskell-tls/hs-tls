@@ -78,7 +78,7 @@ handleHTML ctx showRequest ini = do
             putStrLn $ "Updating key..." ++ either (const "gave up") (\ok -> if ok then "OK" else "NG") r
         mcheck <-
             if "GET /secret" `BS.isPrefixOf` bs
-                then Just <$> requestCertificateAsync ctx
+                then Just <$> requestCertificateAsyncWith ctx
                 else return Nothing
         when (bs /= "") $ do
             when showRequest $ do
@@ -88,11 +88,14 @@ handleHTML ctx showRequest ini = do
             ok <- maybe (return True) authenticated mcheck
             when ok $ sendData ctx html
     -- The response is sent only after the authentication.
-    authenticated check = do
-        r <- check True
-        putStrLn $ "Post handshake authentication..." ++ show r
+    -- giving up if the client does not respond in 10 seconds
+    authenticated wait = do
+        tv <- STM.registerDelay 10000000
+        r <- wait (STM.readTVar tv >>= STM.check)
+        putStrLn $ "Post handshake authentication..." ++ either (const "gave up") show r
         return $ case r of
-            PHAFailed _ -> False
+            Right (PHAFailed _) -> False
+            Left () -> False
             _ -> True
     consume getLine = do
         bs <- getLine

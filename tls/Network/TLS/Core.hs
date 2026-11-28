@@ -33,6 +33,7 @@ module Network.TLS.Core (
     KeyUpdateRequest (..),
     requestCertificate,
     requestCertificateAsync,
+    requestCertificateAsyncWith,
     PHAResult (..),
 ) where
 

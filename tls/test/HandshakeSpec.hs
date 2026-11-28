@@ -11,6 +11,7 @@ import Control.Concurrent (
     threadDelay,
  )
 import Control.Concurrent.Async (concurrently_)
+import qualified Control.Concurrent.STM as STM
 import qualified Control.Exception as E
 import Control.Monad
 import Crypto.Cipher.AES (AES128)
@@ -316,6 +317,8 @@ spec = do
             post_handshake_auth_async_bye
         it "keeps reading after bye when the response arrives" $
             post_handshake_auth_async_bye_read
+        it "gives up waiting for a post-handshake auth, then gets the result" $
+            post_handshake_auth_async_with
         it "closes the connection when a synchronous post-handshake auth fails" $
             post_handshake_auth_sync_fail
         it "commits the client certificate of a post-handshake auth at Finished" $
@@ -3636,6 +3639,24 @@ post_handshake_auth_async_bye_read = do
   where
     isFailed (Just (PHAFailed _)) = True
     isFailed _ = False
+
+-- | The waiter gives up while the client has not read the request.  After
+-- the response, the known result wins over a give-up which has fired.
+post_handshake_auth_async_with :: IO ()
+post_handshake_auth_async_with = do
+    params <- generate arbitraryPairParams13
+    cred <- generate arbitraryPHACredential
+    withPairContext (phaParams True cred params) $ \(cCtx, sCtx) -> do
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        wait <- requestCertificateAsyncWith sCtx
+        tv <- STM.registerDelay 100000
+        wait (STM.readTVar tv >>= STM.check) `shouldReturn` Left ()
+        -- the client answers the request while receiving
+        sendData sCtx "response"
+        recvDataAssert cCtx "response"
+        sendData cCtx "request"
+        recvDataAssert sCtx "request"
+        wait (return ()) `shouldReturn` Right (PHAAccepted (fst cred))
 
 -- | The client's Finished is held back after its CertificateVerify has been
 -- verified.  Until Finished arrives, the result is pending and the chain is

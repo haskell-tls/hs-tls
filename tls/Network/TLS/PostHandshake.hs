@@ -2,10 +2,13 @@ module Network.TLS.PostHandshake (
     requestCertificate,
     requestCertificateServer,
     requestCertificateAsync,
+    requestCertificateAsyncWith,
     requestCertificateAsyncServer,
     postHandshakeAuthWith,
     postHandshakeAuthClientWith,
 ) where
+
+import Control.Concurrent.STM
 
 import Network.TLS.Context.Internal
 import Network.TLS.Handshake.Client
@@ -45,10 +48,25 @@ requestCertificate ctx =
 -- connection, e.g. a received alert, an 'Control.Exception.IOException'
 -- from the backend or 'Network.TLS.bye', or with an exception inside a
 -- record.  It waits as long as the client does not respond, and while
--- 'Network.TLS.recvData' is not called, so put a timeout on it if needed.
+-- 'Network.TLS.recvData' is not called; 'requestCertificateAsyncWith'
+-- bounds it.
 requestCertificateAsync :: Context -> IO (Bool -> IO PHAResult)
-requestCertificateAsync ctx =
-    checkValid ctx >> doRequestCertificateAsync_ (ctxRoleParams ctx) ctx
+requestCertificateAsync ctx = do
+    checkValid ctx
+    result <- doRequestCertificateAsync_ (ctxRoleParams ctx) ctx
+    return $ \block ->
+        atomically $ if block then result else result `orElse` return PHAPending
+
+-- | 'requestCertificateAsync' whose returned action blocks until the
+-- result is known or the give-up fires, which gives 'Left'.  A result
+-- known already wins over the give-up.
+--
+-- @since 2.7.0
+requestCertificateAsyncWith :: Context -> IO (STM a -> IO (Either a PHAResult))
+requestCertificateAsyncWith ctx = do
+    checkValid ctx
+    result <- doRequestCertificateAsync_ (ctxRoleParams ctx) ctx
+    return $ \giveUp -> atomically $ (Right <$> result) `orElse` (Left <$> giveUp)
 
 -- | Handle a post-handshake authentication flight with TLS 1.3.  This
 -- is called automatically by 'recvData', in a context where the read
