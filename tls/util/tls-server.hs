@@ -1,9 +1,11 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
+import Control.Concurrent.STM
 import qualified Control.Exception as E
 import Data.IORef
 import qualified Data.Map.Strict as M
@@ -20,6 +22,9 @@ import System.Environment (getArgs)
 import System.Exit
 import System.IO
 import System.X509
+#if !defined(mingw32_HOST_OS)
+import System.Posix.Signals (Handler (..), installHandler, sigINT, sigTERM)
+#endif
 
 import Common
 import Imports
@@ -191,7 +196,17 @@ main = do
             | otherwise = \_ -> return ()
         creds = Credentials [cred]
     makeCipherShowPretty
-    runTCPServer (Just host) port $ \sock -> do
+    stopping <- newTVarIO False
+    let stop = readTVar stopping >>= check
+        giveUp n = (stop `orElse`) <$> deadline n
+        settings =
+            defaultServerSettings
+                { settingsInstallShutdownHandler = \stopServer ->
+                    installShutdownHandler $ do
+                        atomically $ writeTVar stopping True
+                        stopServer
+                }
+    runTCPServerWithSettings settings (Just host) port $ \sock -> do
         let sparams =
                 getServerParams
                     creds
@@ -217,11 +232,27 @@ main = do
                     --                    , loggingIORecv = \hd bs -> putStrLn $ "}} " ++ show hd ++ " " ++ showBytesHex bs
                     }
         when (optDebugLog || optShow) $ putStrLn "------------------------"
-        handshake ctx
-        when optDebugLog $
-            getInfo ctx >>= printHandshakeInfo
-        server ctx optShow
-        bye ctx
+        r <- giveUp idleTimeout >>= handshakeWith ctx
+        case r of
+            Left () -> putStrLn "Handshake...gave up"
+            Right () -> do
+                when optDebugLog $
+                    getInfo ctx >>= printHandshakeInfo
+                server ctx giveUp optShow
+                -- close_notify is sent even when stopping
+                deadline 3 >>= byeWith ctx
+
+-- | SIGINT and SIGTERM stop the server: it accepts no more, and the
+-- connections give up and end.
+installShutdownHandler :: IO () -> IO ()
+#if defined(mingw32_HOST_OS)
+installShutdownHandler _ = return ()
+#else
+installShutdownHandler action = do
+    let handler = Catch action
+    void $ installHandler sigINT handler Nothing
+    void $ installHandler sigTERM handler Nothing
+#endif
 
 getServerParams
     :: Credentials

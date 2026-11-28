@@ -167,6 +167,9 @@ executable tls-server
         stm,
         tls
 
+    if !os(windows)
+        build-depends: unix
+
     if flag(devel)
 
     else
@@ -192,7 +195,9 @@ executable tls-client
         crypton-x509-system,
         ech-config,
         network,
+        network-byte-order,
         network-run >=0.8 && <0.9,
+        stm,
         tls
 
     if flag(devel)
