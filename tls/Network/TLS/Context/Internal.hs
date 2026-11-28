@@ -216,7 +216,7 @@ data RoleParams = RoleParams
     { doHandshake_ :: Context -> IO ()
     , doHandshakeWith_ :: Context -> HandshakeR -> IO ()
     , doRequestCertificate_ :: Context -> IO Bool
-    , doRequestCertificateAsync_ :: Context -> IO (Bool -> IO PHAResult)
+    , doRequestCertificateAsync_ :: Context -> IO (STM PHAResult)
     , doPostHandshakeAuthWith_ :: Context -> Handshake13R -> IO ()
     }
 
@@ -300,7 +300,7 @@ data TLS13State = TLS13State
     -- Actual session id for TLS 1.2, random value for TLS 1.3
     , tls13stSession :: Session
     , tls13stSentExtensions :: [ExtensionID]
-    , tls13stPHA :: Maybe (MVar PHAResult, TLSError)
+    , tls13stPHA :: Maybe (TMVar PHAResult, TLSError)
     -- ^ server: the result of the pending post-handshake authentication,
     -- and the error given to the waiters when the connection is closed
     , tls13stPHAResponding :: Bool
@@ -505,7 +505,7 @@ setEOF ctx = do
 wakePHA :: Context -> IO ()
 wakePHA ctx = do
     mpha <- tls13stPHA <$> readIORef (ctxTLS13State ctx)
-    forM_ mpha $ \(mv, err) -> void $ tryPutMVar mv $ PHAFailed err
+    forM_ mpha $ \(mv, err) -> void $ atomically $ tryPutTMVar mv $ PHAFailed err
 
 ctxCloseNotify :: Context -> IO Bool
 ctxCloseNotify ctx = readIORef $ ctxCloseNotify_ ctx

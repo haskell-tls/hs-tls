@@ -13,7 +13,7 @@ module Network.TLS.Handshake.Server.TLS13 (
     KeyUpdateRequest (..),
 ) where
 
-import Control.Concurrent.MVar
+import Control.Concurrent.STM
 import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import Data.IORef
@@ -275,7 +275,7 @@ requestCertificateServer sparams ctx = handleEx ctx $ do
 -- | The response is processed by 'recvData' as pending actions, so the
 -- application keeps receiving data meanwhile.
 requestCertificateAsyncServer
-    :: ServerParams -> Context -> IO (Bool -> IO PHAResult)
+    :: ServerParams -> Context -> IO (STM PHAResult)
 requestCertificateAsyncServer sparams ctx = withWriteLock ctx $ do
     tls13 <- tls13orLater ctx
     supportsPHA <- usingState_ ctx getTLS13ClientSupportsPHA
@@ -284,13 +284,10 @@ requestCertificateAsyncServer sparams ctx = withWriteLock ctx $ do
     noActions <- null <$> readIORef (ctxPendingRecvActions ctx)
     if tls13 && supportsPHA && established == Established && not pending && noActions
         then do
-            mv <- newEmptyMVar
+            mv <- newEmptyTMVarIO
             request mv
-            return $ \block ->
-                if block
-                    then readMVar mv
-                    else fromMaybe PHAPending <$> tryReadMVar mv
-        else return $ \_ -> return PHAUnavailable
+            return $ readTMVar mv
+        else return $ return PHAUnavailable
   where
     -- The actions are registered before CertificateRequest is sent, so
     -- that the response cannot reach 'recvData' first.
@@ -321,7 +318,7 @@ requestCertificateAsyncServer sparams ctx = withWriteLock ctx $ do
         modifyTLS13State ctx $ \st ->
             st{tls13stPHA = Nothing, tls13stPHAResponding = False}
         -- 'bye' may have woken the waiters already.
-        void $ tryPutMVar mv $ maybe PHADeclined PHAAccepted mcerts
+        void $ atomically $ tryPutTMVar mv $ maybe PHADeclined PHAAccepted mcerts
     -- The waiters get the error when 'recvData' has sent the alert and
     -- closed the connection, so that they do not send close_notify.
     reportTo mv f =

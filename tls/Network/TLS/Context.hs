@@ -119,7 +119,7 @@ class TLSParams a where
     doHandshake :: a -> Context -> IO ()
     doHandshakeWith :: a -> Context -> HandshakeR -> IO ()
     doRequestCertificate :: a -> Context -> IO Bool
-    doRequestCertificateAsync :: a -> Context -> IO (Bool -> IO PHAResult)
+    doRequestCertificateAsync :: a -> Context -> IO (STM PHAResult)
     doPostHandshakeAuthWith :: a -> Context -> Handshake13R -> IO ()
 
 instance TLSParams ClientParams where
@@ -132,7 +132,7 @@ instance TLSParams ClientParams where
     doHandshake = handshakeClient
     doHandshakeWith = handshakeClientWith
     doRequestCertificate _ _ = return False
-    doRequestCertificateAsync _ _ = return $ \_ -> return PHAUnavailable
+    doRequestCertificateAsync _ _ = return $ return PHAUnavailable
     doPostHandshakeAuthWith = postHandshakeAuthClientWith
 
 instance TLSParams ServerParams where
