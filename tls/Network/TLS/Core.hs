@@ -29,6 +29,7 @@ module Network.TLS.Core (
     recvData',
     closeNotifyReceived,
     updateKey,
+    updateKeyWith,
     KeyUpdateRequest (..),
     requestCertificate,
     requestCertificateAsync,
@@ -420,6 +421,35 @@ sendDataWith ctx dataToSend giveUp = liftIO $ do
     send tls13 = do
         when tls13 $ sendCFifNecessary ctx
         sendDataLocked ctx tls13 dataToSend
+
+-- | 'updateKey' which gives up once the 'STM' action succeeds, also while
+-- waiting for the write lock.  Given up on before the send begins, the
+-- context can still be used; after that, later sends throw.  With a
+-- backend which cannot give up on a send, only the wait for the lock is
+-- given up on.
+--
+-- @since 2.7.0
+updateKeyWith
+    :: MonadIO m => Context -> KeyUpdateRequest -> STM a -> m (Either a Bool)
+updateKeyWith ctx way giveUp = liftIO $ do
+    tls13 <- tls13orLater ctx
+    if not tls13
+        then return $ Right False
+        else do
+            early <- atomically $ (Just <$> giveUp) `orElse` return Nothing
+            case early of
+                Just a -> return $ Left a
+                Nothing -> do
+                    (giveUp', given) <- recording giveUp
+                    withWriteLockGivingUp ctx giveUp (withTxGiveUp ctx giveUp' send)
+                        `E.catch` \e ->
+                            if e == gaveUpSending
+                                then given >>= maybe (E.throwIO e) (return . Left)
+                                else E.throwIO e
+  where
+    send = sendKeyUpdate ctx $ case way of
+        OneWay -> UpdateNotRequested
+        TwoWay -> UpdateRequested
 
 sendDataLocked :: Context -> Bool -> L.ByteString -> IO ()
 sendDataLocked ctx tls13 dataToSend = do

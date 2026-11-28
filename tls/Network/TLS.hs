@@ -274,6 +274,7 @@ module Network.TLS (
 
     -- ** Post-handshake actions
     updateKey,
+    updateKeyWith,
     KeyUpdateRequest (..),
     requestCertificate,
     requestCertificateAsync,

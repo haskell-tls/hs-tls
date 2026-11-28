@@ -81,6 +81,21 @@ spec = describe "giving up" $ do
             timeout 5000000 (sendData sCtx "def") `shouldReturn` Just ()
             timeout 5000000 (recvData cCtx) `shouldReturn` Just "def"
 
+    it "updateKeyWith updates the keys as usual" $
+        withPair $ \(cCtx, _) (sCtx, _) -> do
+            timeout 5000000 (updateKeyWith cCtx TwoWay (retry :: STM ()))
+                `shouldReturn` Just (Right True)
+            sendData cCtx "abc"
+            timeout 5000000 (recvData sCtx) `shouldReturn` Just "abc"
+            sendData sCtx "def"
+            timeout 5000000 (recvData cCtx) `shouldReturn` Just "def"
+
+    it "updateKeyWith gives up at once without sending" $
+        withPair $ \(cCtx, _) (sCtx, _) -> do
+            timeout 5000000 (updateKeyWith sCtx TwoWay (return ())) `shouldReturn` Just (Left ())
+            timeout 5000000 (sendData sCtx "def") `shouldReturn` Just ()
+            timeout 5000000 (recvData cCtx) `shouldReturn` Just "def"
+
 #if !defined(mingw32_HOST_OS)
     it "sendDataWith gives up on a peer which does not read" $
         withPair $ \_ (sCtx, _) -> do
@@ -94,6 +109,13 @@ spec = describe "giving up" $ do
             withAsync (sendData sCtx big) $ \_ -> do
                 waitReading
                 timeout 5000000 (sendDataWith sCtx "abc" =<< lateBy 50000)
+                    `shouldReturn` Just (Left ())
+
+    it "updateKeyWith gives up waiting for another writer" $
+        withPair $ \_ (sCtx, _) ->
+            withAsync (sendData sCtx big) $ \_ -> do
+                waitReading
+                timeout 5000000 (updateKeyWith sCtx OneWay =<< lateBy 50000)
                     `shouldReturn` Just (Left ())
 
     it "recvDataWith gives up on the KeyUpdate it owes, waiting for another writer" $
