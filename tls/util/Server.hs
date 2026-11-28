@@ -4,6 +4,7 @@
 module Server where
 
 import Control.Concurrent
+import qualified Control.Concurrent.STM as STM
 import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
@@ -71,8 +72,10 @@ handleHTML ctx showRequest ini = do
     process getLine = do
         bs <- getLine
         when ("GET /keyupdate" `BS.isPrefixOf` bs) $ do
-            r <- updateKey ctx TwoWay
-            putStrLn $ "Updating key..." ++ if r then "OK" else "NG"
+            -- giving up if the peer does not read for 5 seconds
+            tv <- STM.registerDelay 5000000
+            r <- updateKeyWith ctx TwoWay (STM.readTVar tv >>= STM.check)
+            putStrLn $ "Updating key..." ++ either (const "gave up") (\ok -> if ok then "OK" else "NG") r
         mcheck <-
             if "GET /secret" `BS.isPrefixOf` bs
                 then Just <$> requestCertificateAsync ctx

@@ -164,6 +164,7 @@ executable tls-server
         ech-config,
         network,
         network-run >=0.8 && <0.9,
+        stm,
         tls
 
     if flag(devel)
