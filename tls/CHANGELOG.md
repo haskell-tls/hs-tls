@@ -20,6 +20,8 @@
   [#682](https://github.com/haskell-tls/hs-tls/pull/682)
 * util: give up instead of killing or hanging.
   [#683](https://github.com/haskell-tls/hs-tls/pull/683)
+* Add respectingGracefulClose.
+  [#684](https://github.com/haskell-tls/hs-tls/pull/684)
 
 ## Version 2.6.4
 
