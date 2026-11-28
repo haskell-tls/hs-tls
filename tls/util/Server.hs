@@ -1,7 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
-module Server where
+module Server (
+    GiveUp,
+    idleTimeout,
+    server,
+) where
 
 import Control.Concurrent
 import qualified Control.Concurrent.STM as STM
@@ -9,10 +12,12 @@ import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as CL8
+import Data.Either (isRight)
 import Data.IORef
 import Network.TLS
 import Prelude hiding (getLine)
 
+import Common (tryExpected)
 import Imports
 
 -- "<>" creates *chunks* of lazy ByteString, resulting
@@ -32,50 +37,81 @@ html =
   where
     body = "<html><<body>Hello world!</body></html>"
 
+-- | Making a give-up which fires once the server is told to stop or
+-- the seconds given have passed.
+type GiveUp = Int -> IO (STM.STM ())
+
+-- Seconds a client may stay silent.
+idleTimeout :: Int
+idleTimeout = 30
+
 -- An HTTP request is answered with HTML, anything else is echoed.
 -- tlsfuzzer's test-lengths.py sends "A..A\n", or just "\n", and expects
 -- it back.
-server :: Context -> Bool -> IO ()
-server ctx showRequest = do
-    bs <- recvData ctx
-    case C8.uncons bs of
-        Nothing -> return ()
-        Just ('G', _) -> handleHTML ctx showRequest bs
-        Just _ -> do
-            sendData ctx $ CL8.fromStrict bs
-            echo ctx
+server :: Context -> GiveUp -> Bool -> IO ()
+server ctx giveUp showRequest = do
+    mbs <- recv ctx giveUp
+    case C8.uncons <$> mbs of
+        Just (Just ('G', _)) -> handleHTML ctx giveUp showRequest $ fromJust mbs
+        Just (Just _) -> do
+            ok <- send ctx giveUp $ fromJust mbs
+            when ok $ echo ctx giveUp
+        _ -> return ()
 
-echo :: Context -> IO ()
-echo ctx = loop
+echo :: Context -> GiveUp -> IO ()
+echo ctx giveUp = loop
   where
     loop = do
-        bs <- recvData ctx
-        when (bs /= "") $ do
-            sendData ctx $ CL8.fromStrict bs
-            loop
+        mbs <- recv ctx giveUp
+        forM_ mbs $ \bs -> when (bs /= "") $ do
+            ok <- send ctx giveUp bs
+            when ok loop
 
--- A dedicated thread keeps calling 'recvData', which also processes the
--- response to a post-handshake authentication.
-handleHTML :: Context -> Bool -> ByteString -> IO ()
-handleHTML ctx showRequest ini = do
+-- | 'Nothing' when giving up.
+recv :: Context -> GiveUp -> IO (Maybe ByteString)
+recv ctx giveUp = do
+    g <- giveUp idleTimeout
+    either (const Nothing) Just <$> recvDataWith ctx g
+
+-- | 'False' when giving up.
+send :: Context -> GiveUp -> ByteString -> IO Bool
+send ctx giveUp bs = do
+    g <- giveUp idleTimeout
+    isRight <$> sendDataWith ctx (CL8.fromStrict bs) g
+
+-- A dedicated thread keeps calling 'recvDataWith', which also processes
+-- the response to a post-handshake authentication.  It gives up once
+-- the request is answered.
+handleHTML :: Context -> GiveUp -> Bool -> ByteString -> IO ()
+handleHTML ctx giveUp showRequest ini = do
     chan <- newChan
-    E.bracket (forkIO $ reader chan) killThread $ \_ -> do
-        getLine <- newSource chan ini
-        process getLine
+    done <- STM.newTVarIO False
+    finished <- newEmptyMVar
+    -- EOF also when the reader dies of something unexpected
+    _ <-
+        forkIO $
+            reader chan (STM.readTVar done >>= STM.check)
+                `E.finally` (writeChan chan "" >> putMVar finished ())
+    getLine <- newSource chan ini
+    process getLine
+        `E.finally` (STM.atomically (STM.writeTVar done True) >> takeMVar finished)
   where
-    reader chan = do
-        r <- E.try $ recvData ctx
+    reader chan stop = do
+        g <- giveUp idleTimeout
+        r <- tryExpected $ recvDataWith ctx (stop `STM.orElse` g)
         case r of
-            Right bs | bs /= "" -> writeChan chan bs >> reader chan
-            Right _ -> writeChan chan ""
-            Left (_ :: E.SomeException) -> writeChan chan ""
+            Right (Right bs) | bs /= "" -> writeChan chan bs >> reader chan stop
+            Left err -> putStrLn err >> writeChan chan ""
+            _ -> writeChan chan ""
     process getLine = do
         bs <- getLine
         when ("GET /keyupdate" `BS.isPrefixOf` bs) $ do
             -- giving up if the peer does not read for 5 seconds
-            tv <- STM.registerDelay 5000000
-            r <- updateKeyWith ctx TwoWay (STM.readTVar tv >>= STM.check)
-            putStrLn $ "Updating key..." ++ either (const "gave up") (\ok -> if ok then "OK" else "NG") r
+            g <- giveUp 5
+            r <- updateKeyWith ctx TwoWay g
+            putStrLn $
+                "Updating key..."
+                    ++ either (const "gave up") (\ok -> if ok then "OK" else "NG") r
         mcheck <-
             if "GET /secret" `BS.isPrefixOf` bs
                 then Just <$> requestCertificateAsyncWith ctx
@@ -86,12 +122,12 @@ handleHTML ctx showRequest ini = do
                 BS.putStr "\n"
             consume getLine
             ok <- maybe (return True) authenticated mcheck
-            when ok $ sendData ctx html
+            when ok $ void $ send ctx giveUp $ CL8.toStrict html
     -- The response is sent only after the authentication.
     -- giving up if the client does not respond in 10 seconds
     authenticated wait = do
-        tv <- STM.registerDelay 10000000
-        r <- wait (STM.readTVar tv >>= STM.check)
+        g <- giveUp 10
+        r <- wait g
         putStrLn $ "Post handshake authentication..." ++ either (const "gave up") show r
         return $ case r of
             Right (PHAFailed _) -> False

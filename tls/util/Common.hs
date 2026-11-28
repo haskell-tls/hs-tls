@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 
@@ -14,7 +15,12 @@ module Common (
     getInfo,
     printHandshakeInfo,
     showBytesHex,
+    deadline,
+    tryExpected,
 ) where
+
+import Control.Concurrent.STM
+import qualified Control.Exception as E
 
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
@@ -131,3 +137,20 @@ printHandshakeInfo i = do
 
 showBytesHex :: ByteString -> String
 showBytesHex bs = C8.unpack $ B16.encode bs
+
+-- | A give-up which fires once the seconds given have passed; with zero
+-- or less, it never fires.
+deadline :: Int -> IO (STM ())
+deadline n
+    | n <= 0 = return retry
+    | otherwise = do
+        tv <- registerDelay $ min n 2000 * 1000000
+        return $ readTVar tv >>= check
+
+-- | Catching only the errors a TLS connection is expected to end with.
+tryExpected :: IO a -> IO (Either String a)
+tryExpected action =
+    (Right <$> action)
+        `E.catches` [ E.Handler $ \(e :: TLSException) -> return $ Left $ show e
+                    , E.Handler $ \(e :: E.IOException) -> return $ Left $ show e
+                    ]

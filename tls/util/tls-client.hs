@@ -3,10 +3,12 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
 import Control.Concurrent
+import Control.Concurrent.STM (retry)
 import qualified Control.Exception as E
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
@@ -14,6 +16,7 @@ import Data.IORef
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import Data.X509.CertificateStore
+import Network.ByteOrder (BufferOverrun)
 import Network.Run.TCP
 import Network.Socket
 import Network.TLS hiding (is0RTTPossible)
@@ -47,6 +50,7 @@ data Options = Options
     , optIPv4Only :: Bool
     , optIPv6Only :: Bool
     , optTrustedAnchor :: Maybe FilePath
+    , optTimeout :: Int
     }
     deriving (Show)
 
@@ -71,6 +75,7 @@ defaultOptions =
         , optIPv4Only = False
         , optIPv6Only = False
         , optTrustedAnchor = Nothing
+        , optTimeout = 30
         }
 
 usage :: String
@@ -168,6 +173,11 @@ options =
         ["trusted-anchor"]
         (ReqArg (\fl o -> o{optTrustedAnchor = Just fl}) "<file>")
         "trusted anchor file"
+    , Option
+        []
+        ["timeout"]
+        (ReqArg (\n o -> o{optTimeout = read n}) "<seconds>")
+        "give up on each connection after this (default 30, none with 0)"
     ]
 
 showUsageAndExit :: String -> IO a
@@ -219,6 +229,7 @@ main = do
                 , auxDebugPrint = debug
                 , auxShow = showContent
                 , auxReadResumptionData = readIORef ref
+                , auxGiveUp = retry
                 }
     mstore <- case optTrustedAnchor of
         Nothing ->
@@ -230,9 +241,11 @@ main = do
     echConfList <- case optECHConfigFile of
         Nothing -> return []
         Just ecnff ->
-            loadECHConfigList ecnff `E.catch` \(E.SomeException _) -> do
-                putStrLn $ ecnff ++ " is broken"
-                exitFailure
+            loadECHConfigList ecnff `E.catches` [E.Handler unreadable, E.Handler short]
+          where
+            broken = putStrLn (ecnff ++ " is broken") >> exitFailure
+            unreadable (_ :: E.IOException) = broken
+            short (_ :: BufferOverrun) = broken
     let cparams =
             getClientParams
                 opts
@@ -254,10 +267,10 @@ runClient
     :: Options -> Cli -> ClientParams -> Aux -> NonEmpty ByteString -> IO ()
 runClient opts@Options{..} client cparams aux@Aux{..} paths = do
     auxDebugPrint "------------------------"
-    (info1, msd) <- runTLS opts cparams aux $ \ctx -> do
+    (info1, msd) <- runTLS opts cparams aux $ \aux' ctx -> do
         i1 <- getInfo ctx
         when optDebugLog $ printHandshakeInfo i1
-        client aux paths ctx
+        client aux' paths ctx
         msd' <- auxReadResumptionData
         return (i1, msd')
     if
@@ -326,27 +339,29 @@ runClient2 opts@Options{..} client cparams aux@Aux{..} paths = do
     threadDelay 100000
     auxDebugPrint "<<<< next connection >>>>"
     auxDebugPrint "------------------------"
-    runTLS opts cparams aux $ \ctx -> do
+    runTLS opts cparams aux $ \aux' ctx -> do
         if opt0RTT
             then do
-                void $ client aux paths ctx
+                void $ client aux' paths ctx
                 i <- getInfo ctx
                 when optDebugLog $ printHandshakeInfo i
                 return i
             else do
                 i <- getInfo ctx
                 when optDebugLog $ printHandshakeInfo i
-                void $ client aux paths ctx
+                void $ client aux' paths ctx
                 return i
 
 runTLS
     :: Options
     -> ClientParams
     -> Aux
-    -> (Context -> IO a)
+    -> (Aux -> Context -> IO a)
     -> IO a
-runTLS Options{..} cparams Aux{..} action =
-    runTCPClientWithSettings settings auxAuthority auxPort $ \sock -> do
+runTLS Options{..} cparams aux0 action =
+    runTCPClientWithSettings settings (auxAuthority aux0) (auxPort aux0) $ \sock -> do
+        giveUp <- deadline optTimeout
+        let aux = aux0{auxGiveUp = giveUp}
         ctx <- contextNew sock cparams
         when optDebugLog $
             contextHookSetLogging
@@ -357,9 +372,9 @@ runTLS Options{..} cparams Aux{..} action =
                     --                    , loggingIOSent = \bs -> putStrLn $ "}} " ++ showBytesHex bs
                     --                    , loggingIORecv = \hd bs -> putStrLn $ "{{ " ++ show hd ++ " " ++ showBytesHex bs
                     }
-        handshake ctx
-        r <- action ctx
-        bye ctx
+        orExit =<< handshakeWith ctx giveUp
+        r <- action aux ctx
+        byeWith ctx giveUp
         return r
   where
     select addrs
