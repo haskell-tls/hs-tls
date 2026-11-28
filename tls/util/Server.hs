@@ -73,11 +73,12 @@ recv ctx giveUp = do
     g <- giveUp idleTimeout
     either (const Nothing) Just <$> recvDataWith ctx g
 
--- | 'False' when giving up.
+-- | 'False' when giving up or when the client has closed gracefully.
 send :: Context -> GiveUp -> ByteString -> IO Bool
 send ctx giveUp bs = do
     g <- giveUp idleTimeout
-    isRight <$> sendDataWith ctx (CL8.fromStrict bs) g
+    isRight
+        <$> respectingGracefulClose ctx (Left ()) (sendDataWith ctx (CL8.fromStrict bs) g)
 
 -- A dedicated thread keeps calling 'recvDataWith', which also processes
 -- the response to a post-handshake authentication.  It gives up once
