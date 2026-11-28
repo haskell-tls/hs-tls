@@ -14,6 +14,8 @@
   [#678](https://github.com/haskell-tls/hs-tls/pull/678)
 * Give-ups: run the caller's STM once, and use it in more waits.
   [#680](https://github.com/haskell-tls/hs-tls/pull/680)
+* Add updateKeyWith.
+  [#681](https://github.com/haskell-tls/hs-tls/pull/681)
 
 ## Version 2.6.4
 
