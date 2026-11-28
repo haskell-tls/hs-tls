@@ -12,6 +12,8 @@
   [#677](https://github.com/haskell-tls/hs-tls/pull/677)
 * handshake waits for an auth failure without a thread when it can give up.
   [#678](https://github.com/haskell-tls/hs-tls/pull/678)
+* Give-ups: run the caller's STM once, and use it in more waits.
+  [#680](https://github.com/haskell-tls/hs-tls/pull/680)
 
 ## Version 2.6.4
 
