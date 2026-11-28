@@ -27,6 +27,7 @@ module Network.TLS (
     sendData,
     recvData,
     closeNotifyReceived,
+    respectingGracefulClose,
     bye,
 
     -- * Giving up on an event

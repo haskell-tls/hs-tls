@@ -28,6 +28,7 @@ module Network.TLS.Core (
     recvDataWith,
     recvData',
     closeNotifyReceived,
+    respectingGracefulClose,
     updateKey,
     updateKeyWith,
     KeyUpdateRequest (..),
@@ -895,6 +896,25 @@ terminateWithWriteLock ctx send err level desc reason = withWriteLock ctx $ do
 -- @since 2.5.0
 closeNotifyReceived :: MonadIO m => Context -> m Bool
 closeNotifyReceived = liftIO . ctxCloseNotify
+
+-- | Running an action, typically a send, which is to succeed with the
+-- value given when it fails because the peer has closed the connection
+-- gracefully, i.e. with close_notify at the TLS level.  This is not the
+-- graceful close of TCP.  After close_notify, tls has answered with its
+-- own, so what the action sends has nowhere to go.  Other ends of the
+-- connection, a fatal alert for instance, are thrown as before.
+--
+-- > respectingGracefulClose ctx () $ sendData ctx bs
+-- > respectingGracefulClose ctx (Right ()) $ sendDataWith ctx bs giveUp
+--
+-- @since 2.7.0
+respectingGracefulClose :: Context -> a -> IO a -> IO a
+respectingGracefulClose ctx closed action =
+    action `E.catch` \e -> case e of
+        PostHandshake Error_EOF -> do
+            graceful <- ctxCloseNotify ctx
+            if graceful then return closed else E.throwIO e
+        _ -> E.throwIO e
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 

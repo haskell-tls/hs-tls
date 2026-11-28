@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeApplications #-}
@@ -8,7 +9,7 @@ import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import qualified Control.Exception as E
-import Control.Monad (when)
+import Control.Monad (void, when)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Data.Either (isLeft)
@@ -58,6 +59,20 @@ spec = describe "bye" $ do
         timeout 5000000 (concurrently (bye cCtx) (recvData sCtx))
             `shouldReturn` Just ((), mempty)
         closeNotifyReceived sCtx `shouldReturn` True
+
+    it "respects a graceful close only after close_notify" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        withPairContext' cParams sParams $ \_ cCtx sCtx -> do
+            -- the client closes gracefully
+            concurrently_ (bye cCtx) (recvData sCtx `shouldReturn` "")
+            respectingGracefulClose sCtx "closed" ("sent" <$ sendData sCtx "x")
+                `shouldReturn` ("closed" :: String)
+        withPairContext' cParams sParams $ \pipe _ sCtx -> do
+            -- a broken record ends the connection, not gracefully
+            writePipeC pipe $ "\x17\x03\x03\x00\x20" <> B.replicate 32 0
+            void (recvData sCtx) `shouldThrow` (\(_ :: TLSException) -> True)
+            respectingGracefulClose sCtx () (sendData sCtx "x")
+                `shouldThrow` (\e -> e == PostHandshake Error_EOF)
 
     it "gives up on a receive over a socket" $ do
 #if MIN_VERSION_network(3,2,12)
@@ -437,3 +452,16 @@ sendWithVia :: IORef Bool -> (ByteString -> IO ()) -> SendWith
 sendWithVia stuck snd' = SendWith $ \bs giveUp -> do
     s <- readIORef stuck
     if s then Left <$> atomically giveUp else Right <$> snd' bs
+
+withPairContext'
+    :: ClientParams -> ServerParams -> (PipeChan -> Context -> Context -> IO a) -> IO a
+withPairContext' cParams sParams body = do
+    pipe <- newPipe
+    _ <- runPipe pipe
+    let noop = return ()
+        cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+        sBackend = Backend noop noop (writePipeS pipe) (readPipeS pipe)
+    cCtx <- contextNew cBackend cParams
+    sCtx <- contextNew sBackend sParams
+    concurrently_ (handshake cCtx) (handshake sCtx)
+    body pipe cCtx sCtx
